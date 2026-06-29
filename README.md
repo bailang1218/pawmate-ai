@@ -103,6 +103,27 @@ pawmate/
 tests/                    Logic and routing tests
 ```
 
+## 运行环境 / Runtime Environment
+
+公开包当前按下面的环境进行复现和验证：
+
+The public package is intended to be reproduced with the environment below:
+
+- 操作系统：Windows 桌面环境优先；无边框窗口、Qt WebEngine、桌宠悬浮窗和本机浏览器复用都围绕 Windows 调试。
+- Operating system: Windows desktop first; frameless windows, Qt WebEngine, desktop-pet overlay, and native browser reuse are tuned around Windows.
+- Python：推荐 Python 3.11，`pyproject.toml` 要求 `>=3.11`；公开包验证使用 Python 3.11。
+- Python: Python 3.11 is recommended. `pyproject.toml` requires `>=3.11`, and the public package was verified with Python 3.11.
+- Shell：README 命令以 PowerShell 为准。
+- Shell: README commands are written for PowerShell.
+- 模型服务：至少需要配置一个模型供应商 API key，例如 DeepSeek、OpenAI-compatible、Anthropic、Qwen、Gemini 或 MiniMax。
+- Model provider: at least one model provider API key is required, such as DeepSeek, OpenAI-compatible, Anthropic, Qwen, Gemini, or MiniMax.
+- 浏览器自动化：Playwright Chromium 是可选安装项；如果要复用本机登录态，需要已安装 Edge/Chrome，并按配置走 CDP/native browser 流程。
+- Browser automation: Playwright Chromium is optional. Reusing local login state requires an installed Edge/Chrome browser and the configured CDP/native-browser flow.
+- 运行数据：`.venv`、`pawmate/config.json`、日志、浏览器 profiles、聊天记录和缓存都不会提交到仓库，首次运行后在本机生成。
+- Runtime data: `.venv`, `pawmate/config.json`, logs, browser profiles, chat history, and caches are not committed; they are generated locally after first run.
+- 打包状态：当前公开版从源码运行；一键 EXE/安装器仍在路线图中。
+- Packaging status: the current public package runs from source; one-click EXE/installer packaging is still on the roadmap.
+
 ## 快速开始 / Quick Start
 
 ```powershell
