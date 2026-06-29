@@ -25,6 +25,24 @@ This repository is a sanitized public alpha package for portfolio review and rep
 
 这是一个脱敏后的公开 Alpha 包，用于作品集展示和可复现的本地运行。仓库不包含私有配置、日志、浏览器配置、聊天记录、API keys 或其他本地运行数据。
 
+## 使用截图 / Screenshots
+
+<p align="center">
+  <img src="docs/assets/pawmate-agent-browser-task.png" width="760" alt="PawMate browser automation with desktop-pet feedback">
+</p>
+
+<p align="center">
+  <sub>桌宠气泡和聊天窗口会一起反馈工具执行状态。 / The desktop-pet bubble and chat window surface tool progress together.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/pawmate-agent-result.png" width="760" alt="PawMate agent result summary">
+</p>
+
+<p align="center">
+  <sub>浏览器读取完成后，Agent 回到聊天窗口总结结果。 / After browser extraction, the agent returns a concise result summary in chat.</sub>
+</p>
+
 ## 亮点 / Highlights
 
 PawMate 不是又一个 LLM 聊天壳。它的核心目标是把“陪伴型桌宠”和“能真正干活的本地 Agent”合在一起。
