@@ -13,6 +13,14 @@ PawMate AI is a Windows desktop AI agent with an animated desktop-pet interface.
 
 ![PawMate main UI](docs/assets/pawmate-main.png)
 
+<p align="center">
+  <img src="docs/assets/pawmate-pet.png" width="220" alt="PawMate desktop pet">
+</p>
+
+<p align="center">
+  <sub>当前公开版使用 PNG 帧贴图；后续视觉贴图层计划迁移到 Live2D。 / The current public build uses PNG frame sprites; the visual layer is planned to migrate to Live2D later.</sub>
+</p>
+
 This repository is a sanitized public alpha package for portfolio review and reproducible local runs. It excludes private configuration, logs, browser profiles, conversation history, API keys, and other local runtime data.
 
 这是一个脱敏后的公开 Alpha 包，用于作品集展示和可复现的本地运行。仓库不包含私有配置、日志、浏览器配置、聊天记录、API keys 或其他本地运行数据。
@@ -158,12 +166,18 @@ The current public package has been verified with `72 passed`. The included test
 
 The desktop pet code and frame assets are included because the runtime depends on exact frame names and alignment. Source code is licensed under Apache-2.0; images, avatars, icons, and other visual assets have separate boundaries documented in [ASSETS_LICENSE.md](ASSETS_LICENSE.md).
 
+当前公开版保留 PNG 帧资源作为可运行基线；后续贴图和视觉表现层计划替换为 Live2D，以提升动作连续性并降低逐帧贴图维护成本。
+
+The current public build keeps PNG frame assets as the runnable baseline. The texture and visual presentation layer is planned to move to Live2D later for smoother motion and lower frame-by-frame asset maintenance.
+
 ## 路线图 / Roadmap
 
 - 稳定首次运行流程和供应商诊断。
 - Stabilize first-run setup and provider diagnostics.
 - 在公开基线验证后，将桌宠拆成独立可安装包。
 - Split the desktop pet into a dedicated installable package after the public baseline is proven.
+- 将当前 PNG 帧贴图升级/替换为 Live2D 视觉层。
+- Replace the current PNG frame sprites with a Live2D visual layer.
 - 添加 Windows 安装器/EXE 打包。
 - Add Windows installer/EXE packaging.
 - 提升 GUI 邻近模块的 CI 覆盖。
