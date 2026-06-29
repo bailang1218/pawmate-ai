@@ -1,0 +1,30 @@
+[importlinter]
+root_packages =
+    pawmate
+
+[importlinter:contract:core-browser-no-tools]
+name = core.browser must not import tool implementations
+type = forbidden
+source_modules =
+    pawmate.core.browser
+forbidden_modules =
+    pawmate.tools
+allow_indirect_imports = true
+
+[importlinter:contract:low-level-browser-no-core-browser]
+name = low-level browser tools must not import core.browser
+type = forbidden
+source_modules =
+    pawmate.tools.playwright_browser
+    pawmate.tools.native_browser
+forbidden_modules =
+    pawmate.core.browser
+
+[importlinter:contract:vision-no-core-browser]
+name = ocr_vision must not import core.browser
+type = forbidden
+source_modules =
+    pawmate.ocr_vision
+forbidden_modules =
+    pawmate.core.browser
+

@@ -1,0 +1,1 @@
+"""PawMate skills package."""

@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pawmate-ai"
+version = "0.1.0a0"
+description = "Windows-first desktop AI assistant with a desktop pet, multi-provider LLM routing, tools, memory, and Web/Qt UI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "PawMate AI contributors" }
+]
+keywords = ["desktop-ai", "pyside6", "llm", "agent", "desktop-pet", "browser-automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Operating System :: Microsoft :: Windows",
+  "Topic :: Desktop Environment",
+]
+dependencies = [
+  "PySide6>=6.7",
+  "httpx>=0.27",
+  "aiohttp>=3.9",
+  "websockets>=12",
+  "APScheduler>=3.10",
+  "SQLAlchemy>=2.0",
+  "Pillow>=10",
+  "numpy>=1.26",
+  "psutil>=5.9",
+  "playwright>=1.45",
+  "openai>=1.0",
+  "anthropic>=0.34",
+  "mcp>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-name/pawmate-ai"
+Issues = "https://github.com/your-name/pawmate-ai/issues"
+
+[project.scripts]
+pawmate = "pawmate.main:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["pawmate*"]
+
+[tool.setuptools.package-data]
+pawmate = [
+  "config.json.example",
+  "ui/web/**/*",
+  "skills/builtin/**/*",
+  "desktop_pet/README.md",
+  "desktop_pet/assets/**/*",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

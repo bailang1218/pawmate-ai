@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Local runtime state
+data/
+logs/
+downloads/
+browser_profiles/
+.qtwebengine_data/
+pawmate/config.json
+config.local.json
+*.local.json
+.env
+*.env
+
+# Browser and Playwright local data
+ms-playwright/
+playwright-report/
+
+# Archives and build outputs
+*.zip
+*.7z
+*.rar
+*.log
+build/
+dist/
+*.egg-info/
+
+# Local IDE/system files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

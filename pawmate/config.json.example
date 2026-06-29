@@ -1,0 +1,77 @@
+{
+  "llm": {
+    "provider": "deepseek",
+    "anthropic": {
+      "api_key": "",
+      "model": "claude-opus-4-8"
+    },
+    "openai": {
+      "api_key": "",
+      "model": "gpt-5.5"
+    },
+    "deepseek": {
+      "api_key": "",
+      "model": "deepseek-v4-flash"
+    },
+    "qwen": {
+      "api_key": "",
+      "model": "qwen3.7-plus"
+    },
+    "gemini": {
+      "api_key": "",
+      "model": "gemini-2.5-flash"
+    },
+    "minimaxi": {
+      "api_key": "",
+      "model": "MiniMax-M3",
+      "group_id": ""
+    }
+  },
+  "security": {
+    "path_access_mode": "strict",
+    "allowed_roots": [
+      "~"
+    ],
+    "command_sandbox_mode": "safe",
+    "mode": "strict",
+    "allowed_path": [
+      "~"
+    ],
+    "sandbox_mode": "safe",
+    "qwebengine_disable_sandbox": false
+  },
+  "websocket": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 18765,
+    "auth_token": ""
+  },
+  "approval": {
+    "llm_explain_enabled": true,
+    "auto_approve_tools": false
+  },
+  "tools": {
+    "browser_backend": "builtin",
+    "browser_use": {
+      "enabled": true,
+      "browser": "edge",
+      "headless": false,
+      "timeout": 180,
+      "attach_mode": "auto",
+      "cdp_url": "",
+      "profile_directory": "auto",
+      "automation_level": "standard"
+    }
+  },
+  "ui": {
+    "use_web_ui": false,
+    "web_ui_mock_mode": false
+  },
+  "runtime": {
+    "task_timeout_seconds": 0
+  },
+  "desktop_pet": {
+    "enabled": false,
+    "reply_surface": "window"
+  }
+}

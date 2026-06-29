@@ -1,0 +1,28 @@
+:root {
+  color-scheme: light;
+  --page-bg: #f0f4f6;
+  --panel-bg: #ffffff;
+  --topbar-bg: #f6fafc;
+  --border: rgba(203, 231, 242, 0.7);
+  --border-strong: #d7edf5;
+  --text: #1f2d35;
+  --text-muted: #6b7c85;
+  --user-bubble: #5db3cf;
+  --ai-bubble: #f2fafd;
+  --tool-bg: #f3fafd;
+  --tool-warn: #fff1ec;
+  --state-running: #5db3cf;
+  --state-success: #4d987f;
+  --state-error: #cf6a46;
+  --state-pending: #6b7c85;
+  --input-bg: #ffffff;
+  --input-surface: #f8fbfc;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-round: 999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self' qrc: data:; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; img-src 'self' qrc: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';"
+  />
+  <title>PawMate Chat</title>
+  <link rel="stylesheet" href="css/style.css?v=20260604-window-hit" />
+  <link rel="stylesheet" href="css/sidebar.css" />
+
+  <!-- Qt Bridge -->
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+
+  <!-- i18n (must be first) -->
+  <script defer src="js/i18n.js"></script>
+
+  <!-- Core utilities -->
+  <script defer src="js/core/dom.js"></script>
+  <script defer src="js/core/events.js"></script>
+  <script defer src="js/core/toast.js"></script>
+  <script defer src="js/core/panels.js?v=20260604-panels"></script>
+  <script defer src="js/core/bridge.js"></script>
+  <script defer src="js/core/app_state.js"></script>
+
+  <!-- Shell -->
+
+  <!-- Chat modules (原 app.js 拆出) -->
+  <script defer src="js/chat/messages.js?v=20260625-stream-trace"></script>
+  <script defer src="js/chat/tools.js"></script>
+
+  <!-- Settings (原 app.js 拆出) -->
+  <script defer src="js/settings/settings_memory.js?v=20260604-panels"></script>
+  <script defer src="js/settings/settings.js?v=20260617-models"></script>
+
+  <!-- Skills -->
+  <script defer src="js/skills/skills_clawhub.js"></script>
+  <script defer src="js/skills/skills_import.js"></script>
+  <script defer src="js/skills/skills_hall.js?v=20260604-panels"></script>
+
+  <!-- Multi-conversation sidebar -->
+  <script defer src="js/sidebar.js?v=20260618-sidebar-new"></script>
+
+  <!-- Entry point (must be LAST) -->
+  <script defer src="js/app.js?v=20260625-stream-trace"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top bar — custom title bar for frameless windows -->
+    <header class="top-bar" id="titleBar">
+      <div class="title-group">
+        <div class="app-logo-wrap">
+          <img class="avatar-peek-img" src="images/avatar_transparent.png" alt="PawMate" />
+        </div>
+        <div class="title-copy">
+          <div class="title-row">
+            <h1>PawMate</h1>
+            <span class="pill" id="modePill">Web</span>
+          </div>
+          <div class="status-row">
+            <span class="status-dot" aria-hidden="true"></span>
+            <span id="statusText">ready</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="top-actions" aria-label="window actions">
+        <label class="top-pet-toggle" id="desktopPetTopToggle" title="开关桌宠">
+          <span class="top-pet-label">桌宠</span>
+          <input type="checkbox" id="desktopPetTopCheckbox" aria-label="开关桌宠" />
+          <span class="top-pet-track"><span class="top-pet-thumb"></span></span>
+        </label>
+        <button class="icon-btn top-tool-btn" id="skillsHallBtn" type="button" title="技能大厅" aria-label="打开技能大厅">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span class="top-tool-label">技能</span>
+        </button>
+        <button class="icon-btn top-tool-btn" id="memoryHallBtn" type="button" title="记忆库" aria-label="打开记忆库">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5C5 3.7 7.7 3 12 3s7 .7 7 1.5S16.3 6 12 6 5 5.3 5 4.5Zm0 0v5C5 10.3 7.7 11 12 11s7-.7 7-1.5v-5M5 9.5v5C5 15.3 7.7 16 12 16s7-.7 7-1.5v-5M5 14.5v5C5 20.3 7.7 21 12 21s7-.7 7-1.5v-5"/></svg>
+          <span class="top-tool-label">记忆</span>
+        </button>
+        <button class="icon-btn top-tool-btn" id="settingsBtn" type="button" title="设置" aria-label="打开设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.75A3.25 3.25 0 1 0 12 15.25A3.25 3.25 0 1 0 12 8.75ZM19.43 13.5C19.5 13.03 19.54 12.52 19.54 12S19.5 10.97 19.43 10.5L21.14 9.16C21.36 8.98 21.42 8.65 21.28 8.39L19.3 4.96C19.16 4.7 18.85 4.59 18.58 4.68L16.55 5.49A8.17 8.17 0 0 0 14.85 4.5L14.53 2.36A.55.55 0 0 0 13.99 1.9H10.01A.55.55 0 0 0 9.47 2.36L9.15 4.5A8.17 8.17 0 0 0 7.45 5.49L5.42 4.68C5.15 4.59 4.84 4.7 4.7 4.96L2.72 8.39C2.58 8.65 2.64 8.98 2.86 9.16L4.57 10.5C4.5 10.97 4.46 11.48 4.46 12S4.5 13.03 4.57 13.5L2.86 14.84C2.64 15.02 2.58 15.35 2.72 15.61L4.7 19.04C4.84 19.3 5.15 19.41 5.42 19.32L7.45 18.51C8 18.92 8.57 19.25 9.15 19.5L9.47 21.64C9.54 21.9 9.76 22.1 10.01 22.1H13.99C14.24 22.1 14.46 21.9 14.53 21.64L14.85 19.5C15.43 19.25 16 18.92 16.55 18.51L18.58 19.32C18.85 19.41 19.16 19.3 19.3 19.04L21.28 15.61C21.42 15.35 21.36 15.02 21.14 14.84L19.43 13.5Z"/></svg>
+          <span class="top-tool-label">设置</span>
+        </button>
+        <button class="icon-btn" id="minimizeBtn" type="button" title="最小化" aria-label="最小化">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11.25H18V12.75H6z"/></svg>
+        </button>
+        <button class="icon-btn" id="maximizeBtn" type="button" title="最大化" aria-label="最大化">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/></svg>
+        </button>
+        <button class="icon-btn danger" id="closeBtn" type="button" title="关闭" aria-label="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.05 6.22 6.22 7.05 11.17 12 6.22 16.95 7.05 17.78 12 12.83 16.95 17.78 17.78 16.95 12.83 12 17.78 7.05 16.95 6.22 12 11.17z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ============================================================
+         Settings Drawer (overlay + side panel)
+         ============================================================ -->
+    <div id="settingsOverlay" class="settings-overlay" style="display:none;"></div>
+    <aside id="settingsDrawer" class="settings-drawer" style="display:none;">
+      <div class="drawer-header">
+        <div class="drawer-title-group">
+          <h2 data-i18n="settingsTitle">设置</h2>
+          <p data-i18n="settingsSubtitle">PawMate 配置</p>
+        </div>
+        <button id="closeSettingsBtn" class="icon-btn drawer-close" type="button" title="关闭设置">
+          <svg viewBox="0 0 24 24"><path d="M7.05 6.22 6.22 7.05 11.17 12 6.22 16.95 7.05 17.78 12 12.83 16.95 17.78 17.78 16.95 12.83 12 17.78 7.05 16.95 6.22 12 11.17z"/></svg>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <nav class="settings-nav" id="settingsNav">
+          <button class="nav-btn active" data-section="general" data-i18n="nav_general">通用</button>
+          <button class="nav-btn" data-section="llm" data-i18n="nav_llm">模型服务</button>
+          <button class="nav-btn" data-section="browser" data-i18n="nav_browser">浏览器</button>
+          <button class="nav-btn" data-section="tools" data-i18n="nav_tools">工具</button>
+          <button class="nav-btn" data-section="security" data-i18n="nav_security">安全</button>
+
+          <button class="nav-btn" data-section="logs" data-i18n="nav_logs">日志</button>
+          <button class="nav-btn" data-section="about" data-i18n="nav_about">关于</button>
+        </nav>
+        <div class="settings-content" id="settingsContent">
+          <!-- Sections are rendered by JS -->
+        </div>
+      </div>
+      <div id="settingsToast" class="settings-toast"></div>
+    </aside>
+
+    <!-- Chat area -->
+    <main class="chat-panel">
+      <section id="messageList" class="message-list" aria-live="polite"></section>
+
+      <footer class="input-shell">
+        <button class="attach-btn" id="attachBtn" type="button" title="附件" aria-label="附件">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 6.5 8.3 14.7a2.6 2.6 0 0 0 3.68 3.68l7.6-7.6a4.5 4.5 0 1 0-6.36-6.36L5.1 12.5a6.25 6.25 0 0 0 8.84 8.84l7.1-7.1-1.06-1.06-7.1 7.1a4.75 4.75 0 1 1-6.72-6.72l8.12-8.12a3 3 0 0 1 4.24 4.24l-7.6 7.6a1 1 0 0 1-1.42-1.42l8.2-8.2z"/></svg>
+        </button>
+
+        <label class="composer" for="messageInput">
+          <textarea id="messageInput" rows="1" placeholder="跟 PawMate 聊聊..."></textarea>
+        </label>
+
+        <button class="task-stop-btn is-idle" id="taskStopBtn" type="button"
+                title="当前没有运行中的任务" aria-label="当前没有运行中的任务" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg>
+        </button>
+
+        <button class="send-btn" id="sendBtn" type="button" title="发送" aria-label="发送">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.4 20.6 21 12 3.4 3.4 3 10l11 2-11 2z"/></svg>
+        </button>
+      </footer>
+    </main>
+  </div>
+
+    
+    <!-- Skills Hall -->
+    <div id="skillsHallOverlay" class="skills-hall-overlay" style="display:none;"></div>
+    <section id="skillsHallPanel" class="skills-hall" style="display:none;">
+      <header class="skills-hall-hdr">
+        <div>
+          <h2>技能大厅</h2>
+          <p>安装、审核和管理 PawMate Skills</p>
+        </div>
+        <button id="skillsHallCloseBtn" class="icon-btn" aria-label="关闭">×</button>
+      </header>
+      <div class="skills-hall-bar">
+        <span class="skills-hall-path">仓库：data/skills</span>
+        <span id="skillsHallStats" class="skills-hall-stats"></span>
+      </div>
+      <nav class="skills-hall-tabs">
+        <button data-hall-tab="overview" class="active">概览</button>
+        <button data-hall-tab="installed">已安装</button>
+        <button data-hall-tab="builtin">PawMate 内置</button>
+        <button data-hall-tab="clawhub">ClawHub</button>
+        <button data-hall-tab="import">本地导入</button>
+      </nav>
+      <main id="skillsHallContent" class="skills-hall-body"></main>
+    </section>
+
+    <!-- Memory Hall -->
+    <div id="memoryHallOverlay" class="memory-hall-overlay" style="display:none;"></div>
+    <section id="memoryHallPanel" class="memory-hall" style="display:none;">
+      <header class="memory-hall-hdr">
+        <div>
+          <h2>记忆库</h2>
+          <p>管理长期记忆、上下文摘要和陪伴状态</p>
+        </div>
+        <button id="memoryHallCloseBtn" class="icon-btn" aria-label="关闭">×</button>
+      </header>
+      <div class="memory-hall-toolbar">
+        <label class="memory-search" for="memoryHallSearch">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.1 11.55l4.18 4.17 1.06-1.06-4.17-4.18A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>
+          <input id="memoryHallSearch" type="search" placeholder="搜索记忆内容、标签或来源..." />
+        </label>
+        <button id="memoryHallRefreshBtn" class="memory-hall-btn" type="button">刷新</button>
+        <button id="memoryHallAddBtn" class="memory-hall-btn primary" type="button">+ 新增</button>
+      </div>
+      <div class="memory-hall-shell">
+        <aside class="memory-hall-side">
+          <button data-memory-tab="core" class="active">
+            <strong>长期记忆</strong>
+            <span id="memoryCoreCount">0 条</span>
+          </button>
+          <button data-memory-tab="episodic">
+            <strong>上下文摘要</strong>
+            <span id="memoryEpisodicCount">0 条</span>
+          </button>
+          <button data-memory-tab="growth">
+            <strong>陪伴状态</strong>
+            <span>设计中</span>
+          </button>
+        </aside>
+        <main class="memory-hall-main">
+          <div id="memoryHallStats" class="memory-hall-stats"></div>
+          <div id="memoryHallContent" class="memory-hall-content"></div>
+        </main>
+      </div>
+    </section>
+
+    <!-- Sandbox off confirmation modal -->
+    <div id="sandboxConfirmOverlay" class="safety-modal-overlay"></div>
+    <div id="sandboxConfirmModal" class="safety-modal">
+      <div class="safety-modal-card">
+        <h3 class="safety-modal-title" data-i18n="confirmSandboxOffTitle">关闭沙箱确认</h3>
+        <p class="safety-modal-body" data-i18n="confirmSandboxOffBody">关闭沙箱后，PawMate 允许在本机真实执行命令...</p>
+        <div class="safety-modal-actions">
+          <button id="sandboxConfirmCancel" class="safety-modal-cancel" data-i18n="confirmSandboxOffCancel">取消</button>
+          <button id="sandboxConfirmConfirm" class="safety-modal-confirm-danger" data-i18n="confirmSandboxOffConfirm">我理解风险，关闭沙箱</button>
+        </div>
+      </div>
+    </div>
+</body>
+</html>
