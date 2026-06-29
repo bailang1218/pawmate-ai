@@ -44,8 +44,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-name/pawmate-ai"
-Issues = "https://github.com/your-name/pawmate-ai/issues"
+Homepage = "https://github.com/bailang1218/pawmate-ai"
+Issues = "https://github.com/bailang1218/pawmate-ai/issues"
 
 [project.scripts]
 pawmate = "pawmate.main:main"

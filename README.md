@@ -2,43 +2,65 @@
 
 > 中文 / English
 
-PawMate AI 是一个 Windows 优先的桌面 AI 助手，使用 Python、PySide6、Web/Qt 聊天界面、多模型供应商路由、本地工具、浏览器自动化、记忆模块和动画桌宠组成。
+![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
+![License](https://img.shields.io/badge/license-Apache--2.0-green)
+![Tests](https://img.shields.io/badge/tests-72%20passing-brightgreen)
 
-PawMate AI is a Windows-first desktop AI assistant built with Python, PySide6, a Web/Qt chat UI, multi-provider LLM routing, local tools, browser automation, memory, and an animated desktop pet.
+PawMate AI 是一个带桌宠形态的 Windows 本地 AI Agent。它不只是聊天窗口，而是把自研 ReAct + Plan-and-Execute 运行时、多供应商 LLM 路由、本地工具、浏览器自动化、长期记忆和动画桌宠放进同一个 PySide6 桌面应用里。
 
-这是一个脱敏后的公开 Alpha 包，主要用于作品集展示和可复现的本地运行。仓库不包含私有配置、日志、浏览器配置、聊天记录或 API keys。
+PawMate AI is a Windows desktop AI agent with an animated desktop-pet interface. It combines a hand-built ReAct + Plan-and-Execute runtime, multi-provider LLM routing, local tools, browser automation, long-term memory, and a Web/Qt chat UI in one PySide6 application.
 
-This is a sanitized public alpha package for portfolio review and reproducible local runs. It excludes private configuration, logs, browser profiles, conversation history, and API keys.
+![PawMate main UI](docs/assets/pawmate-main.png)
 
-## 项目状态 / Status
+This repository is a sanitized public alpha package for portfolio review and reproducible local runs. It excludes private configuration, logs, browser profiles, conversation history, API keys, and other local runtime data.
+
+这是一个脱敏后的公开 Alpha 包，用于作品集展示和可复现的本地运行。仓库不包含私有配置、日志、浏览器配置、聊天记录、API keys 或其他本地运行数据。
+
+## 亮点 / Highlights
+
+PawMate 不是又一个 LLM 聊天壳。它的核心目标是把“陪伴型桌宠”和“能真正干活的本地 Agent”合在一起。
+
+PawMate is not just another LLM chat wrapper. It is built around the idea of combining a companion-style desktop pet with a local agent that can actually execute work.
+
+- 自研 Agent 运行时：ReAct 工具循环和 Plan-and-Execute 任务规划由项目内部实现，没有依赖 LangChain 或 LlamaIndex。
+- Hand-built agent runtime: ReAct tool loops and Plan-and-Execute task planning are implemented inside this project, without LangChain or LlamaIndex dependencies.
+- 多供应商模型路由：支持 OpenAI-compatible、Anthropic、DeepSeek、Qwen、Gemini 和 MiniMax 风格供应商，并提供失败回退链。
+- Multi-provider LLM routing: supports OpenAI-compatible providers, Anthropic, DeepSeek, Qwen, Gemini, and MiniMax-style providers, with fallback handling.
+- 分级安全门：文件、命令、浏览器和工具操作通过确认级别、脱敏和沙箱设置控制。
+- Layered safety gates: file, command, browser, and tool operations are controlled by confirmation levels, redaction, and sandbox settings.
+- 浏览器自动化：支持 Playwright 管理浏览器，也支持通过 CDP 复用本机 Edge/Chrome 登录态。
+- Browser automation: supports managed Playwright browsers and CDP-based reuse of local Edge/Chrome login-state sessions.
+- 双层记忆：核心记忆和情景记忆共同支持跨会话状态保留。
+- Two-layer memory: core memory and episodic memory preserve useful state across conversations.
+- 桌宠运行时：桌宠动作和聊天、工具、记忆事件相连，而不是单独播放动画。
+- Desktop-pet runtime: pet motion is connected to chat, tool, and memory events instead of being a detached animation loop.
+
+## 状态 / Status
 
 - Alpha 阶段，当前以 Windows 为主要目标平台。
 - Alpha quality, currently Windows-first.
-- 已包含桌宠模块和 PNG 帧资源，避免 clone 后动画引用缺失。
+- 桌宠模块和 PNG 帧资源已包含在仓库中，避免 clone 后动画引用缺失。
 - Desktop pet runtime and PNG frame assets are included so the app can run without broken animation references.
 - 用户需要自行配置模型供应商 API key。
 - Users must provide their own model provider API key.
 - 一键 Windows 安装包/EXE 是计划项，但还不是这个公开包的一部分。
 - One-click Windows installer/EXE packaging is planned, but not included in this public package yet.
 
-## 功能 / Features
+## 架构 / Architecture
 
-- 嵌入 PySide6 桌面窗口的 Web 聊天界面。
-- Web-based chat surface embedded in a PySide6 desktop window.
-- 支持 OpenAI-compatible、Anthropic、DeepSeek、Qwen、Gemini、MiniMax 风格的多供应商路由。
-- Multi-provider LLM support for OpenAI-compatible providers, Anthropic, DeepSeek, Qwen, Gemini, and MiniMax-style routing.
-- 带确认门和脱敏处理的工具执行层。
-- Tool execution layer with confirmation gates and redaction.
-- 浏览器自动化封装，支持导航、读取、提取和网页操作。
-- Browser automation facade for navigation, reading, extracting, and acting on web pages.
-- 本地会话存储、长期记忆辅助和运行时诊断。
-- Local conversation storage, long-term memory helpers, and runtime diagnostics.
-- 动画桌宠运行时，包含站立、坐下/工作、睡眠等循环。
-- Animated desktop pet runtime with standing, sitting/work, and sleeping loops.
-- 内置故障排查、代码审查、周报等技能模板。
-- Built-in skill templates for troubleshooting, code review, and weekly reports.
-
-## 结构 / Architecture
+```mermaid
+flowchart LR
+  User["User message"] --> UI["Web/Qt chat UI"]
+  UI --> Engine["Agent engine"]
+  Engine --> Planner["Plan-and-Execute planner"]
+  Engine --> ReAct["ReAct tool loop"]
+  ReAct --> Safety["Confirm gates + redaction"]
+  Safety --> Tools["Local tools / browser / files"]
+  Engine --> Memory["Core + episodic memory"]
+  Engine --> Pet["Desktop-pet event bridge"]
+  Engine --> Providers["LLM provider router"]
+```
 
 ```text
 pawmate/
@@ -58,7 +80,7 @@ tests/                    Logic and routing tests
 ## 快速开始 / Quick Start
 
 ```powershell
-git clone https://github.com/your-name/pawmate-ai.git
+git clone https://github.com/bailang1218/pawmate-ai.git
 cd pawmate-ai
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -113,9 +135,9 @@ Do not commit API keys, tokens, logs, browser profiles, or chat history.
 python -m pytest -q
 ```
 
-当前测试主要覆盖路由、工具解析 holdback、浏览器封装、取消安全和桌宠动作逻辑。
+当前公开包验证过 `72 passed`。测试主要覆盖路由、工具解析 holdback、浏览器封装、取消安全和桌宠动作逻辑。
 
-The included tests focus on routing, parser holdback, browser facade behavior, cancellation safety, and desktop-pet motion logic.
+The current public package has been verified with `72 passed`. The included tests focus on routing, parser holdback, browser facade behavior, cancellation safety, and desktop-pet motion logic.
 
 ## 安全模型 / Security Model
 
@@ -146,8 +168,8 @@ The desktop pet code and frame assets are included because the runtime depends o
 - Add Windows installer/EXE packaging.
 - 提升 GUI 邻近模块的 CI 覆盖。
 - Improve CI coverage for GUI-adjacent modules without requiring a display.
-- 添加截图和短演示 GIF。
-- Add screenshots and a short demo GIF.
+- 添加短演示 GIF，展示聊天、桌宠动作和浏览器自动化的完整回路。
+- Add a short demo GIF showing the full loop from chat, pet motion, and browser automation.
 
 ## 许可证 / License
 
