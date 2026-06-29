@@ -329,6 +329,11 @@ class WebChatWindow(QMainWindow):
             if (window.PawSettings && window.PawSettings.toggle) window.PawSettings.toggle();
             return id;
           }}
+          if (id === 'closeSettingsBtn') {{
+            if (window.PawSettings && window.PawSettings.close) window.PawSettings.close();
+            else btn.click();
+            return id;
+          }}
           if (id === 'minimizeBtn' || id === 'maximizeBtn' || id === 'closeBtn') {{
             btn.click();
             return id;
