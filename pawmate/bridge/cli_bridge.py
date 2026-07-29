@@ -26,7 +26,10 @@ def _json(payload: dict) -> str:
 def resolve_cli_shell() -> tuple[str, list[str], str]:
     """Return an interactive shell program, arguments, and display name."""
     if os.name == "nt":
-        program = shutil.which("pwsh.exe") or shutil.which("powershell.exe") or "powershell.exe"
+        # Windows PowerShell has stable stdin behavior with QProcess on both
+        # localized desktops and GitHub's Windows runners. Use PowerShell Core
+        # only when the system shell is unavailable.
+        program = shutil.which("powershell.exe") or shutil.which("pwsh.exe") or "powershell.exe"
         return program, ["-NoLogo", "-NoProfile", "-NoExit", "-Command", "-"], "PowerShell"
     program = os.environ.get("SHELL") or shutil.which("bash") or "/bin/sh"
     return program, ["-i"], Path(program).name
