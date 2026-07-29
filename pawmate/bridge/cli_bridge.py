@@ -1,9 +1,9 @@
 """Persistent local CLI process exposed to the Web workspace via QWebChannel."""
 from __future__ import annotations
 
+import base64
 import codecs
 import json
-import locale
 import logging
 import os
 import shutil
@@ -51,10 +51,12 @@ class CliBridge(QObject):
         super().__init__(parent)
         self._working_directory = Path(working_directory or get_project_root()).resolve()
         self._program, self._arguments, self._shell_name = resolve_cli_shell()
+        self._uses_legacy_windows_powershell = (
+            os.name == "nt"
+            and Path(self._program).name.lower() == "powershell.exe"
+        )
         self._input_encoding = (
-            locale.getpreferredencoding(False)
-            if os.name == "nt" and Path(self._program).name.lower() == "powershell.exe"
-            else "utf-8"
+            "ascii" if self._uses_legacy_windows_powershell else "utf-8"
         )
         self._process = (process_factory or QProcess)(self)
         self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
@@ -320,6 +322,13 @@ class CliBridge(QObject):
             return
         while self._pending_lines:
             line = self._pending_lines.pop(0)
+            if self._uses_legacy_windows_powershell:
+                payload = base64.b64encode(line.encode("utf-8")).decode("ascii")
+                line = (
+                    "Invoke-Expression "
+                    "([Text.Encoding]::UTF8.GetString("
+                    f"[Convert]::FromBase64String('{payload}')))"
+                )
             self._process.write(
                 (line + "\r\n").encode(self._input_encoding, errors="replace")
             )

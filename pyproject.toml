@@ -35,12 +35,13 @@ dependencies = [
   "playwright>=1.45",
   "openai>=1.0",
   "anthropic>=0.34",
-  "mcp>=1.0",
+  "mcp>=1.9,<2",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "pytest>=8",
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.23,<2",
 ]
 
 [project.urls]
