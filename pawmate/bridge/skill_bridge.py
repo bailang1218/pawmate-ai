@@ -134,21 +134,14 @@ class SkillBridge:
 
     def list_local_skills(self) -> dict[str, Any]:
         try:
-            from pawmate.skills.skill_store import list_local_skills
-
-            return {"items": list_local_skills()}
+            return {"items": self._make_manager().list_skills()}
         except Exception as exc:
             raise _to_skill_bridge_error(exc) from exc
 
     def set_skill_status(self, slug: str, new_status: str) -> dict[str, Any]:
         # TODO-Phase7: route skill status mutation through the permission service.
         try:
-            from pawmate.skills.skill_store import update_skill_status
-
-            item = update_skill_status(slug, new_status)
-            if item:
-                return {"item": item}
-            raise SkillBridgeError(f"Skill '{slug}' not found")
+            return {"item": self._make_manager().set_status(slug, new_status)}
         except SkillBridgeError:
             raise
         except Exception as exc:

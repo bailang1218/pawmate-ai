@@ -24,9 +24,12 @@ from pawmate.qt_compat import (
 )
 
 from pawmate.ui.web_chat_view import WebChatView
+from pawmate.ui.embedded_browser import EmbeddedBrowserWorkspace
 from pawmate.ui.app_icon import apply_app_icon
 from pawmate.bridge.window_bridge import WindowBridge
 from pawmate.bridge.config_bridge import ConfigBridge, set_config_path
+from pawmate.bridge.browser_automation_bridge import BrowserAutomationBridge
+from pawmate.bridge.cli_bridge import CliBridge
 
 
 class WebChatWindow(QMainWindow):
@@ -41,19 +44,26 @@ class WebChatWindow(QMainWindow):
         self.resize(1200, 800)
         self.setMinimumSize(800, 560)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # QtWebEngine is not reliable inside a translucent top-level window on
+        # Windows (texture offsets, clipping and click-through). Keep the native
+        # surface opaque until a dedicated native window shell is introduced.
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
 
         self._window_bridge = WindowBridge(self)
         set_config_path(Path(__file__).resolve().parent.parent / "config.json")
         self._config_bridge = ConfigBridge(self)
+        self._browser_automation_bridge = BrowserAutomationBridge(self)
+        self._cli_bridge = CliBridge(self)
         self._window_bridge.closeRequested.connect(self.close)
         self._window_bridge.minimizeRequested.connect(self.showMinimized)
         self._window_bridge.maximizeRestoreRequested.connect(self._toggle_maximize_restore)
 
         central = QWidget()
-        central.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        central.setAutoFillBackground(False)
-        self.setAutoFillBackground(False)
+        central.setObjectName("PawMateSurface")
+        central.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        central.setAutoFillBackground(True)
+        central.setStyleSheet("#PawMateSurface { background-color: #f7fafc; }")
+        self.setAutoFillBackground(True)
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -61,8 +71,17 @@ class WebChatWindow(QMainWindow):
             self, mock_mode=mock_mode,
             window_bridge=self._window_bridge,
             config_bridge=self._config_bridge,
+            browser_automation_bridge=self._browser_automation_bridge,
+            cli_bridge=self._cli_bridge,
         )
         layout.addWidget(self._web_chat_view)
+        self._native_browser_workspace = EmbeddedBrowserWorkspace(central)
+        self._native_browser_workspace.embedRequested.connect(self._show_browser_sidecar)
+        self._browser_host_rect = QRect()
+        self._browser_host_visible = False
+        self._window_bridge.browserHostGeometryRequested.connect(self._set_browser_host_geometry)
+        self._surface_recovery_needed = False
+        self._surface_recovery_generation = 0
 
         # State
         self._drag_active = False
@@ -73,6 +92,10 @@ class WebChatWindow(QMainWindow):
         self._resize_start_global = QPoint()
         self._resize_start_geometry = QRect()
 
+        # Rounded geometry is a native input/paint mask, independent from web
+        # transparency. This preserves both reliable hit-testing and corners.
+        self._update_window_mask()
+
         # Install eventFilters and enable mouseTracking everywhere
         self._install_filters()
         # When QWebEngineView is created later (deferred init), re-install filters
@@ -82,12 +105,9 @@ class WebChatWindow(QMainWindow):
     # Filter installation — everywhere, with mouseTracking
     # ============================================================
     def _install_filters(self):
-        # Global QApplication filter (catches events before QWebEngineView)
-        app = QApplication.instance()
-        if app is not None:
-            app.installEventFilter(self)
-
-        # Self
+        # Scope mouse filtering to this PawMate window. Application-wide
+        # interception makes Chromium input pass through this handler multiple
+        # times and can leave the whole frontend without clicks or focus.
         self.installEventFilter(self)
         self.setMouseTracking(True)
 
@@ -109,12 +129,15 @@ class WebChatWindow(QMainWindow):
             web_view.setMouseTracking(True)
             proxy = web_view.focusProxy()
             if proxy is not None:
+                # This is the one Chromium child that receives native mouse
+                # events. The filter returns False for page content/buttons and
+                # consumes only titlebar drag or resize gestures.
                 proxy.installEventFilter(self)
                 proxy.setMouseTracking(True)
 
         # Every child widget — eventFilter only, no mouseTracking on all
-        for child in self.findChildren(QWidget):
-            child.installEventFilter(self)
+        # Do not install on every child: WebEngine's internal input widgets
+        # must receive native mouse events without a second interception.
 
     # ============================================================
     # eventFilter — safe, only mouse events, use mapFromGlobal
@@ -270,14 +293,14 @@ class WebChatWindow(QMainWindow):
             return True
         # Right tool/window controls. Keep this wider than the exact buttons for DPI safety.
         # The desktop-pet switch is wider than the icon buttons and sits before them.
-        if x >= w - 430:
+        if x >= w - 150:
             return True
         return False
 
     def _dispatch_titlebar_web_button(self, x: int, y: int) -> bool:
         """Forward titlebar tool clicks that Qt may receive before Chromium."""
         w = self.width()
-        if not (20 <= x <= 120 or self._is_sidebar_new_button_area(x, y) or x >= w - 430):
+        if not (20 <= x <= 120 or self._is_sidebar_new_button_area(x, y) or x >= w - 150):
             return False
         web_view = getattr(self._web_chat_view, "_web_view", None)
         if web_view is None:
@@ -381,8 +404,12 @@ class WebChatWindow(QMainWindow):
     # Window control + accessors
     # ============================================================
     def _toggle_maximize_restore(self):
-        if self.isMaximized(): self.showNormal()
-        else: self.showMaximized()
+        if self.isMaximized():
+            self.showNormal()
+            QTimer.singleShot(0, self._update_window_mask)
+        else:
+            self.clearMask()
+            self.showMaximized()
 
     def is_web_ui_enabled(self) -> bool: return True
     def get_web_chat_view(self): return self._web_chat_view
@@ -390,6 +417,161 @@ class WebChatWindow(QMainWindow):
         if self._web_chat_view: return self._web_chat_view.bridge
         return None
     def get_config_bridge(self): return self._config_bridge
+    def get_browser_automation_bridge(self): return self._browser_automation_bridge
+    def get_cli_bridge(self): return self._cli_bridge
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_window_mask()
+        self._apply_browser_host_geometry()
+
+    def showEvent(self, event):  # noqa: N802 - Qt API
+        super().showEvent(event)
+        self._schedule_surface_recovery(remount=self._surface_recovery_needed)
+
+    def changeEvent(self, event):  # noqa: N802 - Qt API
+        super().changeEvent(event)
+        event_type = event.type()
+        if event_type == QEvent.Type.WindowStateChange:
+            if self.isMinimized():
+                self._surface_recovery_needed = True
+                host = getattr(self, "_native_browser_workspace", None)
+                if host is not None:
+                    host.set_workspace_visible(False)
+                return
+            self._schedule_surface_recovery(remount=True)
+            return
+        if event_type == QEvent.Type.ActivationChange:
+            if self.isActiveWindow():
+                self._schedule_surface_recovery(
+                    remount=self._surface_recovery_needed
+                )
+            else:
+                self._surface_recovery_needed = True
+
+    def _schedule_surface_recovery(self, remount: bool = False) -> None:
+        if not hasattr(self, "_surface_recovery_generation"):
+            return
+        self._surface_recovery_generation += 1
+        generation = self._surface_recovery_generation
+        QTimer.singleShot(
+            0,
+            lambda: self._recover_window_surface(generation, remount),
+        )
+        QTimer.singleShot(
+            80,
+            lambda: self._recover_window_surface(generation, False),
+        )
+
+    def _recover_window_surface(self, generation: int, remount: bool) -> None:
+        if (
+            generation != self._surface_recovery_generation
+            or not self.isVisible()
+            or self.isMinimized()
+        ):
+            return
+        self._surface_recovery_needed = False
+        self._update_window_mask()
+        web_chat_view = getattr(self, "_web_chat_view", None)
+        if web_chat_view is not None:
+            web_chat_view.show()
+            recover = getattr(web_chat_view, "recover_render_surface", None)
+            if callable(recover):
+                recover(remount=remount)
+        central = self.centralWidget()
+        if central is not None:
+            central.update()
+        self.update()
+        self._apply_browser_host_geometry()
+
+    def closeEvent(self, event):  # noqa: N802 - Qt API
+        self._native_browser_workspace.detach_browser()
+        self._cli_bridge.shutdown()
+        super().closeEvent(event)
+
+    def _set_browser_host_geometry(
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        visible: bool,
+    ) -> None:
+        self._browser_host_rect = QRect(int(x), int(y), int(width), int(height))
+        self._browser_host_visible = bool(visible and width > 0 and height > 0)
+        self._apply_browser_host_geometry()
+
+    def _show_browser_sidecar(self, _cdp_url: str, visible: bool, _process_id: int) -> None:
+        """Ask the web shell for a current slot before showing the native host."""
+        if not visible:
+            return
+        web_view = getattr(self._web_chat_view, "_web_view", None)
+        if web_view is None:
+            return
+        web_view.page().runJavaScript(
+            """
+            (function revealBrowserSidecar(attempt) {
+              if (window.PawWorkspace &&
+                  typeof window.PawWorkspace.showBrowserSidecar === "function") {
+                window.PawWorkspace.showBrowserSidecar();
+                return;
+              }
+              if (attempt < 20) {
+                setTimeout(function () { revealBrowserSidecar(attempt + 1); }, 100);
+              }
+            })(0);
+            """
+        )
+
+    def _apply_browser_host_geometry(self) -> None:
+        host = getattr(self, "_native_browser_workspace", None)
+        central = self.centralWidget()
+        if host is None or central is None or not self._browser_host_visible:
+            if host is not None:
+                host.set_workspace_visible(False)
+            return
+        bounds = central.rect()
+        rect = self._browser_host_rect.intersected(bounds)
+        if rect.width() < 80 or rect.height() < 80:
+            host.set_workspace_visible(False)
+            return
+        host.setGeometry(rect)
+        host.set_workspace_visible(True)
+
+    def _update_window_mask(self) -> None:
+        """Clip only the native outer corners; keep WebEngine fully opaque."""
+        import sys
+        if sys.platform != "win32":
+            self.clearMask()
+            return
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            hwnd = int(self.winId())
+            user32 = ctypes.windll.user32
+            if self.isMaximized():
+                user32.SetWindowRgn(hwnd, 0, True)
+                return
+
+            rect = wintypes.RECT()
+            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                return
+            width = max(1, rect.right - rect.left)
+            height = max(1, rect.bottom - rect.top)
+            # CSS uses border-radius:18px. GDI expects the ellipse diameter in
+            # physical pixels; account for Qt/Windows display scaling.
+            diameter = max(2, int(round(36 * float(self.devicePixelRatioF()))))
+            region = ctypes.windll.gdi32.CreateRoundRectRgn(
+                0, 0, width + 1, height + 1, diameter, diameter
+            )
+            if region:
+                # On success Windows owns the HRGN; do not DeleteObject it.
+                if not user32.SetWindowRgn(hwnd, region, True):
+                    ctypes.windll.gdi32.DeleteObject(region)
+        except Exception:
+            # Keep a usable rectangular window if native clipping is absent.
+            self.clearMask()
 
     def open_settings_section(self, section: str = "general", message: str | None = None) -> bool:
         def _run() -> bool:

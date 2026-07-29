@@ -84,6 +84,9 @@ class HistoryStore:
         self, tool_use_id: str, result: Any, tool_name: str = "tool"
     ) -> int:
         """Add a tool result, packed into a structured content dict."""
+        tool_use_id = str(tool_use_id or "").strip()
+        if not tool_use_id:
+            raise ValueError("tool result requires a non-empty tool_call_id")
         return self._store.append_message(self._sid, "tool", {
             "result": result,
             "tool_use_id": tool_use_id,

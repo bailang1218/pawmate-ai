@@ -27,4 +27,3 @@ def test_login_wall_blocks_any_goal():
     items = [{"text": "请先登录", "selector": ".bili-mini-login"}]
     result = assess_reachability("随便看看", "https://www.bilibili.com/x", items)
     assert not result.reachable and result.page_kind == "login_wall"
-

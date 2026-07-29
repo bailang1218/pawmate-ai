@@ -492,6 +492,27 @@
 .memory-modal-pin {
   color: #4a5568 !important;
 }
+.memory-modal select.memory-modal-input {
+  min-height: 40px;
+  background: #fff;
+}
+.memory-pager {
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: center;
+  margin-top: 18px;
+  padding: 10px 0 2px;
+}
+.memory-pager span {
+  min-width: 72px;
+  color: #718096;
+  text-align: center;
+  font-size: 12px;
+}
+.memory-pager button:disabled {
+  cursor: default;
+  opacity: .45;
+}
 
 @media (max-width: 760px) {
   .memory-hall {

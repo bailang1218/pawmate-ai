@@ -7,10 +7,12 @@ clawHubAsyncResponse signal.
 
 import json
 import logging
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable
 
+from pawmate.core.observability.stream_trace import StreamTraceAggregator
 from pawmate.qt_compat import QApplication, QMessageBox, QObject, Signal, Slot
 from pawmate.bridge.skill_bridge import (
     SkillBridgeError,
@@ -98,6 +100,7 @@ class WebBridge(QObject):
     heartbeatWarning = Signal(str)        # JSON heartbeat warning
     presenceNudge = Signal(str)           # JSON non-chat presence nudge
     maintenanceTick = Signal(str)         # JSON maintenance tick
+    modelRuntimeChanged = Signal(str)     # JSON active model and token usage
     # 工具确认请求 (发往 JS)
     toolConfirmRequest = Signal(str, str)  # tool_name, input_json
     setStatus = Signal(str)
@@ -139,7 +142,12 @@ class WebBridge(QObject):
         self._pending_lock = threading.Lock()
         self._pending_callbacks: set[str] = set()
         self._backend_status = "starting..."
+        self._model_runtime = "{}"
         self._stream_trace_counts: dict[tuple[str, int], int] = {}
+        self._stream_trace = StreamTraceAggregator(self._logger)
+        self._trace_bridge_stream = os.getenv("PAWMATE_TRACE_BRIDGE_STREAM", "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
         self._last_stream_seq_by_turn: dict[int, int] = {}
         # mock_mode kept for backward compat; ChatService owns mock logic now.
 
@@ -240,6 +248,16 @@ class WebBridge(QObject):
         return self._backend_status
 
     @Slot(str)
+    def relayModelRuntime(self, payload_json: str) -> None:
+        payload = payload_json or "{}"
+        self._model_runtime = payload
+        self.modelRuntimeChanged.emit(payload)
+
+    @Slot(result=str)
+    def getModelRuntime(self) -> str:
+        return self._model_runtime or "{}"
+
+    @Slot(str)
     def relayAssistantDelta(self, text: str) -> None:
         """Relay one assistant stream delta to JavaScript."""
         value = "" if text is None else str(text)
@@ -274,7 +292,12 @@ class WebBridge(QObject):
 
     @Slot(int)
     def finalizeAssistantTurn(self, turn_id: int) -> None:
-        self.finalizeAssistantForTurn.emit(int(turn_id or 0))
+        turn = int(turn_id or 0)
+        self._stream_trace.flush_matching(
+            lambda key: isinstance(key, tuple) and len(key) == 2 and int(key[1] or 0) == turn,
+            reason="finalize",
+        )
+        self.finalizeAssistantForTurn.emit(turn)
 
     @Slot(str)
     def frontendTrace(self, payload: str) -> None:
@@ -282,19 +305,18 @@ class WebBridge(QObject):
         self._logger.info("[FrontendTrace] %s", str(payload or "")[:500])
 
     def _trace_stream(self, channel: str, turn_id: int, value: str) -> None:
+        if not self._trace_bridge_stream:
+            return
         key = (channel, int(turn_id or 0))
         count = self._stream_trace_counts.get(key, 0) + 1
         self._stream_trace_counts[key] = count
-        if count <= 80 or count % 100 == 0:
-            sample = value.replace("\n", "\\n")[:80]
-            self._logger.info(
-                "[StreamTrace] bridge.%s turn=%s seq=%s len=%s text=%r",
-                channel,
-                int(turn_id or 0),
-                count,
-                len(value),
-                sample,
-            )
+        self._stream_trace.record(
+            key,
+            component=f"bridge.{channel}",
+            turn_id=int(turn_id or 0),
+            seq=count,
+            text=value,
+        )
 
     @Slot(str)
     def relayTaskList(self, payload_json: str) -> None:

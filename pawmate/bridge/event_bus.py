@@ -12,6 +12,7 @@ from pawmate.bridge.contracts import (
     AppEvent,
     EventKind,
 )
+from pawmate.bridge.event_boundary import EventBoundary, ensure_event_boundary
 from pawmate.qt_compat import QObject, Signal
 
 Handler = Callable[[AppEvent], Any]
@@ -31,6 +32,7 @@ class EventBus(QObject):
         super().__init__(parent)
         self._subscribers: dict[type[AppEvent], list[Handler]] = defaultdict(list)
         self._kind_subscribers: dict[str, list[Handler]] = defaultdict(list)
+        self._last_boundary: EventBoundary | None = None
         # Strong refs to in-flight async handler tasks. The event loop only keeps
         # a weak reference, so without this set a pending task can be garbage
         # collected mid-execution and the handler silently never runs.
@@ -40,8 +42,14 @@ class EventBus(QObject):
         """Publish one typed event to Python subscribers and Qt listeners."""
         if not isinstance(event, AppEvent) or args or kwargs:
             raise TypeError("EventBus.publish requires an AppEvent instance")
+        self._last_boundary = ensure_event_boundary(event)
         self._dispatch(event)
         self.event.emit(event)
+
+    def get_last_boundary(self) -> dict[str, Any]:
+        if self._last_boundary is None:
+            return {}
+        return self._last_boundary.to_dict()
 
     def subscribe(self, event_type: type[AppEvent] | EventKind | str, handler: Handler) -> None:
         if isinstance(event_type, type):

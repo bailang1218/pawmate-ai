@@ -1,71 +1,54 @@
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pawmate.core.tool_router import route_tools_for_turn as R
+from pawmate.core.tools.tool_router import route_tools_for_turn
 
 
-ALL = [
+ALL = {
     "read_text_file",
     "write_file",
     "run_shell_command",
-    "list_directory",
-    "launch_desktop_app",
+    "run_tests",
     "browser_goto",
     "browser_read",
     "browser_act",
     "browser_extract",
-    "open_url",
-    "download_file",
-    "download_with_metadata",
+    "native_web_search",
     "search_memory",
-    "core_remember",
-    "schedule_once",
-    "vision_analyze",
-    "capture_screenshot",
-    "ocr_image",
-]
+}
+BROWSER = {"browser_goto", "browser_read", "browser_act", "browser_extract"}
 
 
-def run_checks(verbose=False):
-    failures = []
+def test_action_intent_exposes_full_registry_but_records_narrow_match():
+    route = route_tools_for_turn("install java and run tests", ALL)
 
-    def ck(name, cond, info=""):
-        if verbose:
-            print(("PASS " if cond else "FAIL ") + name + ("  " + info if info else ""))
-        if not cond:
-            failures.append(name)
-
-    r = R("帮我从0装一个java环境", ALL)
-    ck("装java环境→非空(可执行)", len(r.tool_names) > 0 and "run_shell_command" in r.tool_names, f"kind={r.kind} n={len(r.tool_names)}")
-    r = R("帮我部署一下这个服务", ALL)
-    ck("部署→全量", r.kind == "all" and r.tool_names == set(ALL), f"kind={r.kind}")
-    r = R("编译并运行测试", ALL)
-    ck("编译→全量", r.kind == "all" and r.tool_names == set(ALL))
-    r = R("继续", ALL)
-    ck("继续(无sticky)→全量", r.kind == "all" and r.tool_names == set(ALL), f"kind={r.kind}")
-    r = R("继续", ALL, sticky_tools={"browser_goto", "browser_act", "browser_read"})
-    ck("继续+sticky→全量且记录继承", r.tool_names == set(ALL) and r.inherited_tool_names == {"browser_goto", "browser_act", "browser_read"} and r.kind == "all")
-    r = R("你好呀", ALL)
-    ck("纯闲聊→全量", r.kind == "all" and r.tool_names == set(ALL))
-    r = R("总结一下刚才的结果", ALL)
-    ck("总结→全量", r.kind == "all" and r.tool_names == set(ALL))
-    r = R("你打开抖音给第三个视频评论", ALL)
-    ck("抖音任务→含browser", any(t.startswith("browser_") for t in r.tool_names), f"n={len(r.tool_names)}")
-    r = R("读取这个文件", ALL, sticky_tools={"browser_goto"})
-    ck("匹配+sticky→全量且记录继承", r.tool_names == set(ALL) and r.inherited_tool_names == {"browser_goto"})
-    r = R("在我的浏览器里操作", ALL)
-    ck("我的浏览器→全量暴露", r.tool_names == set(ALL) and any(t.startswith("browser_") for t in r.tool_names))
-    return failures
+    assert route.kind == "shell_task"
+    assert route.tool_names == ALL
+    assert {"run_shell_command", "run_tests"} <= route.matched_tool_names
 
 
-def test_tool_router_sticky_behavior():
-    failures = run_checks()
-    assert not failures, failures
+def test_chat_still_exposes_registry_without_requiring_action_route():
+    route = route_tools_for_turn("hello", ALL)
+
+    assert route.kind == "chat"
+    assert route.tool_names == ALL
+    assert route.inherited_tool_names == set()
 
 
-if __name__ == "__main__":
-    fails = run_checks(verbose=True)
-    print("\n=== ", "ALL PASS" if not fails else f"{len(fails)} FAILED: {fails}")
-    sys.exit(1 if fails else 0)
+def test_browser_intent_exposes_full_registry_and_matches_facade():
+    route = route_tools_for_turn("open https://youtube.com", ALL)
+
+    assert route.kind == "browser_task"
+    assert route.tool_names == ALL
+    assert route.matched_tool_names == BROWSER
+
+
+def test_followup_records_sticky_tools_without_using_them_as_allowlist():
+    sticky = {"browser_goto", "browser_read"}
+    route = route_tools_for_turn("continue", ALL, sticky_tools=sticky)
+
+    assert route.kind == "chat"
+    assert route.tool_names == ALL
+    assert route.inherited_tool_names == sticky

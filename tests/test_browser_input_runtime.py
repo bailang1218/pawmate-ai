@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from pawmate.tools.browser_input import (
+from pawmate.tools.browser.input import (
     BackendUnsupported,
     BrowserActionContext,
     BrowserActionExecutor,
@@ -195,7 +195,7 @@ def test_human_verification_requires_handoff(text: str, reason: str):
 
 
 def test_native_session_disconnected_does_not_launch_managed(monkeypatch):
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     class DisconnectedBrowser:
         def is_connected(self):
@@ -225,7 +225,7 @@ def test_native_session_disconnected_does_not_launch_managed(monkeypatch):
 
 
 def test_cdp_connect_session_records_native_mode():
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     class FakeContext:
         pass
@@ -258,7 +258,7 @@ def test_cdp_connect_session_records_native_mode():
 
 
 def test_native_session_act_reuses_current_native_page(monkeypatch):
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     class ConnectedBrowser:
         def is_connected(self):

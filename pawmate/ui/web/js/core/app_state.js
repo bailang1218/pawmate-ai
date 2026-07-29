@@ -59,6 +59,9 @@
     if (lower.indexOf("working") === 0) {
       return { status: "working", text: raw };
     }
+    if (lower.indexOf("answering") === 0) {
+      return { status: "working", text: raw };
+    }
     if (lower.indexOf("error") === 0 || lower.indexOf("failed") === 0) {
       return { status: "error", text: raw };
     }

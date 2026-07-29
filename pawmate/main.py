@@ -7,6 +7,7 @@ from logging.handlers import RotatingFileHandler
 import os
 import sys
 import threading
+import time
 import warnings
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -16,17 +17,14 @@ from pawmate.qt_compat import QApplication, Qt, QTimer
 import pawmate.config as config
 from pawmate.bridge.contracts import ErrorEvent, ProgressUpdateEvent
 from pawmate.bridge.event_bus import event_bus
-from pawmate.bridge.worker import AgentWorker
-from pawmate.bridge.ws_server import WsChatServer
-from pawmate.core.engine import AgentEngine
-from pawmate.core.environment_diagnostics import log_startup_environment_diagnostics
-from pawmate.core.llm_router import get_available_llm_providers, resolve_llm_route
-from pawmate.core.model_catalog import (
+from pawmate.core.observability.environment_diagnostics import log_startup_environment_diagnostics
+from pawmate.core.model.llm_router import get_available_llm_providers, resolve_llm_route
+from pawmate.core.model.model_catalog import (
     build_default_llm_config,
     normalize_llm_config_keys,
     normalize_provider_key,
 )
-from pawmate.core.redaction import redact_text
+from pawmate.core.safety.redaction import redact_text
 from pawmate.storage.history_store import HistoryStore
 from pawmate.ui.app_icon import apply_app_icon
 from pawmate.ui.native_style import apply_native_style
@@ -73,10 +71,25 @@ class _LogBuffer:
 log_buffer = _LogBuffer()
 
 
-def setup_logging():
+def setup_logging(config: Optional[Dict[str, Any]] = None, *, reset_file_handlers: bool = False):
     """配置 Python root logger 捕获所有日志。"""
     logger = logging.getLogger("pawmate")
     logger.setLevel(logging.INFO)
+
+    if reset_file_handlers:
+        file_flags = (
+            "_pawmate_file_handler",
+            "_pawmate_operations_file_handler",
+            "_pawmate_gateway_file_handler",
+        )
+        for handler in list(logger.handlers):
+            if not any(getattr(handler, flag, False) for flag in file_flags):
+                continue
+            logger.removeHandler(handler)
+            try:
+                handler.close()
+            except Exception:
+                pass
 
     class _TerminalHandler(logging.Handler):
         def emit(self, record):
@@ -97,10 +110,10 @@ def setup_logging():
 
     if not any(getattr(h, "_pawmate_file_handler", False) for h in logger.handlers):
         try:
-            from pawmate.core.app_logs import get_log_path
+            from pawmate.core.observability.app_logs import get_log_path
 
             file_handler = RotatingFileHandler(
-                get_log_path(),
+                get_log_path(config),
                 maxBytes=2 * 1024 * 1024,
                 backupCount=5,
                 encoding="utf-8",
@@ -112,6 +125,71 @@ def setup_logging():
             logger.addHandler(file_handler)
         except Exception:
             pass
+
+    class _LogKindFilter(logging.Filter):
+        def __init__(self, *, logger_prefixes=(), message_prefixes=()):
+            super().__init__()
+            self._logger_prefixes = tuple(logger_prefixes)
+            self._message_prefixes = tuple(message_prefixes)
+
+        def filter(self, record):
+            name = str(record.name or "")
+            if any(name == prefix or name.startswith(prefix + ".") for prefix in self._logger_prefixes):
+                return True
+            message = record.getMessage()
+            return any(message.startswith(prefix) for prefix in self._message_prefixes)
+
+    def _add_kind_file_handler(attr_name, kind, filter_obj):
+        if any(getattr(h, attr_name, False) for h in logger.handlers):
+            return
+        try:
+            from pawmate.core.observability.app_logs import get_log_path
+
+            kind_handler = RotatingFileHandler(
+                get_log_path(config, kind=kind),
+                maxBytes=1024 * 1024,
+                backupCount=3,
+                encoding="utf-8",
+            )
+            setattr(kind_handler, attr_name, True)
+            kind_handler.addFilter(filter_obj)
+            kind_handler.setFormatter(logging.Formatter(
+                "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+            ))
+            logger.addHandler(kind_handler)
+        except Exception:
+            pass
+
+    _add_kind_file_handler(
+        "_pawmate_operations_file_handler",
+        "operations",
+        _LogKindFilter(logger_prefixes=("pawmate.operation",)),
+    )
+    _add_kind_file_handler(
+        "_pawmate_gateway_file_handler",
+        "gateway",
+        _LogKindFilter(
+            logger_prefixes=("pawmate.gateway",),
+            message_prefixes=(
+                "[GATEWAY]",
+                "[StreamTrace]",
+                "[LLMFactory]",
+                "[ProviderRunner]",
+                "[ToolRoute]",
+                "[ToolSticky]",
+                "[ToolRegistry]",
+                "[MCP]",
+                "[ChatService]",
+                "[FrontendTrace]",
+                "[BrowserDiagnostics]",
+                "[StartupDiagnostics]",
+                "[DeepSeek]",
+                "[Qwen]",
+                "[OpenAI]",
+                "[Gemini]",
+            ),
+        ),
+    )
     return logger
 
 
@@ -207,6 +285,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "mode": "strict",
         "allowed_path": ["~"],
         "qwebengine_disable_sandbox": False,
+        "allow_browser_process_launch": False,
     },
     "websocket": {
         "enabled": False,
@@ -241,10 +320,12 @@ def _merge_dict(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 def ensure_config_file() -> Dict[str, Any]:
     """确保配置文件存在且结构完整。"""
     current: Dict[str, Any] = {}
-    if CONFIG_PATH.exists():
+    config_exists = CONFIG_PATH.exists()
+    if config_exists:
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-                current = json.load(f)
+                from pawmate.storage.secret_codec import unprotect_config
+                current = unprotect_config(json.load(f))
         except Exception:
             current = {}
 
@@ -263,13 +344,27 @@ def ensure_config_file() -> Dict[str, Any]:
     approval_cfg = merged.get("approval")
     if isinstance(approval_cfg, dict):
         approval_cfg.pop("disable_confirmations", None)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(merged, f, indent=2, ensure_ascii=False)
+    if not config_exists or merged != current:
+        from pawmate.storage.secret_codec import protect_config
+        tmp_path = CONFIG_PATH.with_suffix(CONFIG_PATH.suffix + ".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(protect_config(merged), f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, CONFIG_PATH)
     return merged
 
 
 def has_valid_api_key(config_data: Dict[str, Any]) -> bool:
     """检查是否已经配置可用的 API Key。"""
+    def _is_transport_safe_key(value: object) -> bool:
+        text = str(value or "").strip()
+        return bool(
+            text
+            and not _is_placeholder(text)
+            and len(text) <= 4096
+            and text.isascii()
+            and not any(char.isspace() for char in text)
+        )
+
     llm_cfg = config_data.get("llm", {})
     llm_mode = str(llm_cfg.get("mode", "")).strip().lower() if isinstance(llm_cfg, dict) else ""
     if llm_mode in {"auto", "router", "route"}:
@@ -278,12 +373,11 @@ def has_valid_api_key(config_data: Dict[str, Any]) -> bool:
 
     env_key = f"{provider.upper()}_API_KEY"
     env_val = os.getenv(env_key, "").strip()
-    if env_val and not _is_placeholder(env_val):
+    if _is_transport_safe_key(env_val):
         return True
 
     provider_cfg = llm_cfg.get(provider, {})
-    cfg_key = str(provider_cfg.get("api_key", "")).strip()
-    return bool(cfg_key and not _is_placeholder(cfg_key))
+    return _is_transport_safe_key(provider_cfg.get("api_key", ""))
 
 
 def _llm_runtime_signature(config_data: Dict[str, Any]) -> tuple[str, tuple[tuple[str, str], ...]]:
@@ -331,8 +425,8 @@ class PawMateApp:
         self._app = QApplication.instance() or QApplication(sys.argv)
         apply_app_icon()
         apply_native_style(self._app)
-        self._worker: Optional[AgentWorker] = None
-        self._engine: Optional[AgentEngine] = None
+        self._worker: Optional[Any] = None
+        self._engine: Optional[Any] = None
         self._ws_server: Optional[Any] = None
         self._desktop_pet: Optional[Any] = None
         self._cfg: Dict[str, Any] = {}
@@ -342,6 +436,10 @@ class PawMateApp:
 
         # 先读取配置，但不阻塞 mock 模式
         cfg = ensure_config_file()
+        from pawmate.storage.app_paths import configure_app_paths
+
+        configure_app_paths(cfg)
+        setup_logging(cfg, reset_file_handlers=True)
         ui_cfg = cfg.get("ui", {})
         is_mock = ui_cfg.get("web_ui_mock_mode", False)
 
@@ -363,13 +461,16 @@ class PawMateApp:
         # ============================================================
         # ChatService — 统一聊天后端入口
         # ============================================================
-        from pawmate.core.chat_service import ChatService
+        from pawmate.core.services.chat_service import ChatService
 
         chat_cfg = dict(self._cfg)
         chat_runtime = dict(chat_cfg.get("runtime", {}))
         chat_runtime["queue_until_worker_ready"] = True
         chat_cfg["runtime"] = chat_runtime
         self._chat_service = ChatService(chat_cfg)
+        cli_bridge = getattr(self._main_window, "get_cli_bridge", lambda: None)()
+        if cli_bridge is not None:
+            cli_bridge.set_chat_service(self._chat_service)
 
         # 设置 Web UI 信号连接
         bridge = self._main_window.get_web_bridge()
@@ -415,10 +516,20 @@ class PawMateApp:
                 event_bus.publish(ProgressUpdateEvent(0, 5, "准备初始化..."))
                 event_bus.publish(ProgressUpdateEvent(1, 5, "加载配置..."))
                 event_bus.publish(ProgressUpdateEvent(2, 5, "检测运行环境..."))
+                diagnostics_started = time.perf_counter()
                 log_startup_environment_diagnostics(self._cfg)
+                pawmate_logger.info(
+                    "[StartupTiming] diagnostics %.2fs",
+                    time.perf_counter() - diagnostics_started,
+                )
                 pawmate_logger.info("开始创建引擎（含 MCP 工具加载）...")
 
+                engine_started = time.perf_counter()
                 eng = self._create_engine_sync(self._cfg)
+                pawmate_logger.info(
+                    "[StartupTiming] engine_create %.2fs",
+                    time.perf_counter() - engine_started,
+                )
 
                 if eng is None:
                     result["error"] = "引擎初始化失败：未返回引擎实例"
@@ -472,8 +583,18 @@ class PawMateApp:
                 event_bus.publish(ProgressUpdateEvent(0, 5, "准备初始化..."))
                 event_bus.publish(ProgressUpdateEvent(1, 5, "加载配置..."))
                 event_bus.publish(ProgressUpdateEvent(2, 5, "检测运行环境..."))
+                diagnostics_started = time.perf_counter()
                 log_startup_environment_diagnostics(self._cfg)
+                pawmate_logger.info(
+                    "[StartupTiming] diagnostics %.2fs",
+                    time.perf_counter() - diagnostics_started,
+                )
+                engine_started = time.perf_counter()
                 eng = self._create_engine_sync(self._cfg)
+                pawmate_logger.info(
+                    "[StartupTiming] engine_create %.2fs",
+                    time.perf_counter() - engine_started,
+                )
                 if eng is None:
                     result["error"] = "引擎初始化失败：未返回引擎实例"
                     return
@@ -515,6 +636,8 @@ class PawMateApp:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            from pawmate.core.runtime.engine import AgentEngine
+
             engine = loop.run_until_complete(
                 AgentEngine.create(
                     history_store=self._history_store,
@@ -526,7 +649,7 @@ class PawMateApp:
             return engine
         except Exception as e:
             pawmate_logger.error(f"引擎创建失败: {e}")
-            return None
+            raise
         finally:
             loop.close()
             asyncio.set_event_loop(None)
@@ -542,10 +665,25 @@ class PawMateApp:
         new_signature = _llm_runtime_signature(cfg)
         self._cfg = cfg
         self._sync_desktop_pet_from_config(cfg)
-        if self._engine is not None and hasattr(self._engine, "apply_approval_config"):
+        if self._engine is not None and hasattr(self._engine, "apply_runtime_config"):
+            self._engine.apply_runtime_config(cfg)
+        elif self._engine is not None and hasattr(self._engine, "apply_approval_config"):
             self._engine.apply_approval_config(cfg)
         if self._setup_required and has_valid_api_key(cfg):
             self._setup_required = False
+            self._start_engine_initialization()
+            return
+        if self._engine is None and old_signature != new_signature:
+            if not has_valid_api_key(cfg):
+                pawmate_logger.warning(
+                    "[Config] LLM config changed to %s but API key is invalid; engine start skipped",
+                    _llm_runtime_label(cfg),
+                )
+                return
+            pawmate_logger.info(
+                "[Config] retrying failed engine with LLM %s",
+                _llm_runtime_label(cfg),
+            )
             self._start_engine_initialization()
             return
         if self._engine is not None and old_signature != new_signature:
@@ -583,6 +721,11 @@ class PawMateApp:
             self._ws_server = None
         if self._worker is not None:
             try:
+                browser_bridge = getattr(
+                    self._main_window, "get_browser_automation_bridge", lambda: None
+                )()
+                if browser_bridge is not None:
+                    browser_bridge.close()
                 self._worker.stop()
             except Exception as exc:
                 pawmate_logger.warning("[Engine] worker stop before restart failed: %s", exc)
@@ -600,13 +743,37 @@ class PawMateApp:
 
     def _on_engine_ready(self, engine):
         """引擎初始化完成回调"""
+        from pawmate.bridge.worker import AgentWorker
+
         self._engine = engine
         self._worker = AgentWorker(engine)
         self._worker.start()
 
+        browser_bridge = getattr(
+            self._main_window, "get_browser_automation_bridge", lambda: None
+        )()
+        if browser_bridge is not None:
+            browser_bridge.set_worker(self._worker)
+
         # 将 worker 注册到 ChatService（real 模式需要）
         if hasattr(self, '_chat_service'):
             self._chat_service.set_worker(self._worker)
+
+        try:
+            publish_runtime = getattr(engine, "publish_model_runtime_status", None)
+            if callable(publish_runtime):
+                publish_runtime("engine_ready")
+        except Exception as exc:
+            pawmate_logger.warning("[ModelRuntime] initial publish failed: %s", exc)
+
+        try:
+            config_bridge = getattr(self._main_window, "get_config_bridge", lambda: None)()
+            if config_bridge is not None:
+                from pawmate.bridge.config_bridge import inject_engine
+
+                inject_engine(engine, bridge=config_bridge)
+        except Exception as exc:
+            pawmate_logger.warning("[Memory] bridge injection after engine ready failed: %s", exc)
 
         # ── 多对话管理器（wire 到已注册的占位对象）───────
         try:
@@ -638,6 +805,8 @@ class PawMateApp:
                         "or PAWMATE_WS_TOKEN"
                     )
                 else:
+                    from pawmate.bridge.ws_server import WsChatServer
+
                     ws_host = str(ws_cfg.get("host", "127.0.0.1") or "127.0.0.1")
                     ws_port = int(ws_cfg.get("port", config.WS_PORT) or config.WS_PORT)
                     self._ws_server = WsChatServer(
@@ -703,10 +872,11 @@ class PawMateApp:
     def _on_engine_error(self, error_msg: str):
         """引擎初始化失败回调"""
         pawmate_logger.error("引擎初始化失败: %s", error_msg)
-
-
-
-
+        if hasattr(self, "_chat_service"):
+            self._chat_service.status_changed.emit(f"error: {error_msg}")
+        bridge = self._main_window.get_web_bridge()
+        if bridge is not None:
+            bridge.setInputEnabled.emit(False)
 
         event_bus.publish(ErrorEvent(f"引擎初始化失败: {error_msg}"))
 
@@ -722,9 +892,9 @@ class PawMateApp:
         for new code prefer AgentEngine.create(app_config=cfg).
         """
         try:
-            from pawmate.core.prompt_assembler import build_prompt_from_config
-            from pawmate.tools.registry import ToolRegistry
-            from pawmate.tools.builtin_gateway import register_builtin_tools
+            from pawmate.core.prompts.prompt_assembler import build_prompt_from_config
+            from pawmate.tools.core.registry import ToolRegistry
+            from pawmate.tools.gateway.builtin_gateway import register_builtin_tools
             reg = ToolRegistry()
             register_builtin_tools(reg)
             return build_prompt_from_config(cfg, reg)
@@ -740,6 +910,11 @@ class PawMateApp:
             except Exception:
                 pass
         if self._worker is not None:
+            browser_bridge = getattr(
+                self._main_window, "get_browser_automation_bridge", lambda: None
+            )()
+            if browser_bridge is not None:
+                browser_bridge.close()
             self._worker.stop()
 
 

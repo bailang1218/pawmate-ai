@@ -14,10 +14,27 @@
   overflow: hidden;
 }
 
+/* The native Win32 rounded region is binary and can show a one-pixel stair
+   step on high-contrast wallpapers. Feather the inner 3px of the edge so the
+   silhouette stays soft without making QtWebEngine or the window transparent. */
+.app-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    inset 0 0 2px rgba(150, 199, 217, 0.30),
+    inset 0 0 4px rgba(150, 199, 217, 0.14);
+}
+
 /* ============================================================
    Top bar - custom title bar
    ============================================================ */
 .top-bar {
+  position: relative;
   flex: 0 0 auto;
   height: 52px;
   background: linear-gradient(180deg, rgba(200, 228, 240, 0.45), rgba(225, 240, 247, 0.30));
@@ -37,7 +54,7 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  max-width: calc(100% - 430px);
+  max-width: calc(100% - 170px);
 }
 
 .brand-mark {
@@ -108,6 +125,89 @@
   background: #67c3a8;
   box-shadow: 0 0 0 4px rgba(103, 195, 168, 0.12);
   animation: pulse 2.3s ease-in-out infinite;
+}
+
+.model-meter {
+  position: absolute;
+  top: 7px;
+  right: 170px;
+  width: clamp(154px, 18vw, 260px);
+  height: 36px;
+  padding: 4px 10px;
+  border: 1px solid rgba(93, 179, 207, 0.30);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.60), 0 4px 14px rgba(80, 160, 190, 0.08);
+  color: #365c6d;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 80;
+}
+
+.model-meter-main,
+.model-meter-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-meter-main {
+  font-size: 12px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.model-meter-sub {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.1;
+  color: #6b8794;
+}
+
+.model-meter.is-estimated .model-meter-sub {
+  color: #8a6c36;
+}
+
+.model-meter.is-fallback {
+  border-color: rgba(88, 179, 204, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 6px 18px rgba(88, 179, 204, 0.18);
+}
+
+.model-fallback-banner {
+  position: absolute;
+  top: 48px;
+  right: 170px;
+  width: clamp(180px, 22vw, 300px);
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid rgba(93, 179, 207, 0.34);
+  border-radius: 8px;
+  background: rgba(244, 252, 255, 0.95);
+  box-shadow: 0 8px 24px rgba(69, 137, 163, 0.16);
+  color: #315f70;
+  font-size: 11px;
+  line-height: 1.25;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+  z-index: 86;
+}
+
+.model-fallback-banner[hidden] {
+  display: none;
+}
+
+.model-fallback-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #58b3cc;
+  box-shadow: 0 0 0 4px rgba(88, 179, 204, 0.12);
 }
 
 .top-actions {
@@ -212,6 +312,12 @@
 
 .top-tool-label {
   line-height: 1;
+}
+
+@media (max-width: 980px) {
+  .model-meter {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {

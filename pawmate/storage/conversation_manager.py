@@ -32,7 +32,7 @@ from pawmate.qt_compat import QObject, Signal, Slot
 from pawmate.storage.conversation_repository import SessionConversationRepository
 
 if TYPE_CHECKING:
-    from pawmate.core.engine import AgentEngine
+    from pawmate.core.runtime.engine import AgentEngine
     from pawmate.storage.session_store import SessionStore
 
 _logger = logging.getLogger("pawmate")

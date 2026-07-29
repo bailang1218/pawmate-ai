@@ -15,6 +15,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.executors.asyncio import AsyncIOExecutor
+from pawmate.storage.app_paths import get_app_paths
 
 logger = logging.getLogger("pawmate.scheduler")
 
@@ -46,7 +47,7 @@ class PawScheduler:
         timezone: str = "Asia/Shanghai",
     ):
         if db_path is None:
-            db_path = Path.home() / ".pawmate" / "sessions.db"
+            db_path = get_app_paths().ensure_database_path()
         self.db_path = Path(db_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 

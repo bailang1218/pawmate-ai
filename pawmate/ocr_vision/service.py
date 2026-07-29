@@ -12,15 +12,16 @@ import base64
 import datetime
 import mimetypes
 import os
-import platform
 import re
 import shutil
 from pathlib import Path
 from threading import Thread
 
 from .models import OCRResult, ScreenshotResult, VisionStorageConfig
-from pawmate.core.llm_factory import get_llm_client
-from pawmate.core.llm_router import resolve_llm_route_candidates
+from pawmate.core.model.llm_factory import get_llm_client
+from pawmate.core.model.llm_router import resolve_llm_route_candidates
+from pawmate.storage.secret_codec import unprotect_config
+from pawmate.storage.app_paths import get_app_paths
 
 try:
     from PIL import ImageGrab
@@ -35,20 +36,7 @@ def _default_root_dir() -> Path:
     if env:
         return Path(env).expanduser().resolve()
 
-    home = Path.home()
-    system = platform.system()
-    if system == "Windows":
-        local_app_data = os.environ.get("LOCALAPPDATA")
-        if local_app_data:
-            return Path(local_app_data) / "PawMate" / "ocr_vision"
-        return home / "AppData" / "Local" / "PawMate" / "ocr_vision"
-    if system == "Darwin":
-        return home / "Library" / "Application Support" / "PawMate" / "ocr_vision"
-
-    xdg_cache = os.environ.get("XDG_CACHE_HOME")
-    if xdg_cache:
-        return Path(xdg_cache) / "pawmate" / "ocr_vision"
-    return home / ".cache" / "pawmate" / "ocr_vision"
+    return get_app_paths().data_root / "ocr_vision"
 
 
 def _load_app_config() -> dict:
@@ -56,7 +44,7 @@ def _load_app_config() -> dict:
     try:
         import json
 
-        data = json.loads(config_path.read_text(encoding="utf-8"))
+        data = unprotect_config(json.loads(config_path.read_text(encoding="utf-8")))
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}

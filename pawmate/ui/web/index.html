@@ -8,12 +8,13 @@
     content="default-src 'self' qrc: data:; script-src 'self' qrc:; style-src 'self' 'unsafe-inline'; img-src 'self' qrc: data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';"
   />
   <title>PawMate Chat</title>
-  <link rel="stylesheet" href="css/style.css?v=20260604-window-hit" />
+  <link rel="stylesheet" href="css/style.css?v=20260723-avatar-bubbles" />
   <link rel="stylesheet" href="css/sidebar.css" />
 
   <!-- Qt Bridge -->
   <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 
+  <link rel="stylesheet" href="css/workspace.css?v=20260724-browser-modal-airspace" />
   <!-- i18n (must be first) -->
   <script defer src="js/i18n.js"></script>
 
@@ -28,8 +29,8 @@
   <!-- Shell -->
 
   <!-- Chat modules (原 app.js 拆出) -->
-  <script defer src="js/chat/messages.js?v=20260625-stream-trace"></script>
-  <script defer src="js/chat/tools.js"></script>
+  <script defer src="js/chat/messages.js?v=20260723-avatar-bubbles"></script>
+  <script defer src="js/chat/tools.js?v=20260724-browser-modal-airspace"></script>
 
   <!-- Settings (原 app.js 拆出) -->
   <script defer src="js/settings/settings_memory.js?v=20260604-panels"></script>
@@ -41,7 +42,8 @@
   <script defer src="js/skills/skills_hall.js?v=20260604-panels"></script>
 
   <!-- Multi-conversation sidebar -->
-  <script defer src="js/sidebar.js?v=20260618-sidebar-new"></script>
+  <script defer src="js/sidebar.js?v=20260723-avatar-bubbles"></script>
+  <script defer src="js/workspace.js?v=20260724-browser-modal-airspace"></script>
 
   <!-- Entry point (must be LAST) -->
   <script defer src="js/app.js?v=20260625-stream-trace"></script>
@@ -64,6 +66,15 @@
             <span id="statusText">ready</span>
           </div>
         </div>
+      </div>
+
+      <div class="model-meter" id="modelMeter" title="Model runtime">
+        <div class="model-meter-main" id="modelMeterName">&#27169;&#22411;&#20934;&#22791;&#20013;</div>
+        <div class="model-meter-sub" id="modelMeterTokens">tokens 0</div>
+      </div>
+      <div class="model-fallback-banner" id="modelFallbackBanner" hidden>
+        <span class="model-fallback-dot" aria-hidden="true"></span>
+        <span id="modelFallbackText">模型已接管</span>
       </div>
 
       <div class="top-actions" aria-label="window actions">
@@ -114,7 +125,6 @@
         <nav class="settings-nav" id="settingsNav">
           <button class="nav-btn active" data-section="general" data-i18n="nav_general">通用</button>
           <button class="nav-btn" data-section="llm" data-i18n="nav_llm">模型服务</button>
-          <button class="nav-btn" data-section="browser" data-i18n="nav_browser">浏览器</button>
           <button class="nav-btn" data-section="tools" data-i18n="nav_tools">工具</button>
           <button class="nav-btn" data-section="security" data-i18n="nav_security">安全</button>
 
@@ -151,9 +161,55 @@
         </button>
       </footer>
     </main>
+
+    <aside id="browserSidecar" class="browser-sidecar" hidden aria-label="PawMate 专属浏览器">
+      <div id="browserSidecarResizer" class="browser-sidecar-resizer" role="separator"
+           aria-label="调整浏览器侧栏宽度" aria-orientation="vertical" tabindex="0"></div>
+      <header class="browser-sidecar-header">
+        <div class="browser-sidecar-title">
+          <span class="browser-sidecar-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 5h18v14H3V5zm0 4h18M6 7h.01"/></svg>
+          </span>
+          <div>
+            <strong>专属浏览器</strong>
+            <span><i></i> Playwright 正在控制</span>
+          </div>
+        </div>
+        <div class="browser-sidecar-actions">
+          <button id="browserSidecarCockpit" type="button" title="打开自动化工作台" aria-label="打开自动化工作台">
+            <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4V5zm4 0v14M11 9h6M11 13h6"/></svg>
+          </button>
+          <button id="browserSidecarClose" type="button" title="收起浏览器侧栏" aria-label="收起浏览器侧栏">
+            <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+        </div>
+      </header>
+      <div class="browser-sidecar-meta">
+        <span>本机 Edge · PawMate 持久化会话</span>
+        <span>已嵌入</span>
+      </div>
+      <div class="browser-sidecar-viewport" data-browser-sidecar-stage>
+        <div class="browser-stage-empty">
+          <div class="browser-loader"></div>
+          <strong>正在连接浏览器</strong>
+          <span>连接完成后会固定显示在这个侧栏中。</span>
+        </div>
+      </div>
+    </aside>
+
+    <section id="workspacePanel" class="workspace-panel" hidden aria-live="polite">
+      <header class="workspace-header">
+        <div><h2 id="workspaceTitle">&#24037;&#20316;&#21306;</h2><p id="workspaceSubtitle">PawMate &#24037;&#20855;</p></div>
+        <div class="workspace-actions">
+          <button id="workspaceRefresh" type="button">&#21047;&#26032;</button>
+          <button id="workspaceClose" type="button">&#36820;&#22238;&#23545;&#35805;</button>
+        </div>
+      </header>
+      <div id="workspaceBody" class="workspace-body"></div>
+    </section>
   </div>
 
-    
+
     <!-- Skills Hall -->
     <div id="skillsHallOverlay" class="skills-hall-overlay" style="display:none;"></div>
     <section id="skillsHallPanel" class="skills-hall" style="display:none;">
@@ -184,31 +240,47 @@
       <header class="memory-hall-hdr">
         <div>
           <h2>记忆库</h2>
-          <p>管理长期记忆、上下文摘要和陪伴状态</p>
+          <p>原子记忆按需召回；聊天原文通过分层 RAG 深度检索，不会全量塞进上下文</p>
         </div>
         <button id="memoryHallCloseBtn" class="icon-btn" aria-label="关闭">×</button>
       </header>
       <div class="memory-hall-toolbar">
         <label class="memory-search" for="memoryHallSearch">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.1 11.55l4.18 4.17 1.06-1.06-4.17-4.18A6.5 6.5 0 0 0 10.5 4Zm0 1.5a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z"/></svg>
-          <input id="memoryHallSearch" type="search" placeholder="搜索记忆内容、标签或来源..." />
+          <input id="memoryHallSearch" type="search" placeholder="服务端搜索记忆或历史对话..." />
         </label>
         <button id="memoryHallRefreshBtn" class="memory-hall-btn" type="button">刷新</button>
         <button id="memoryHallAddBtn" class="memory-hall-btn primary" type="button">+ 新增</button>
       </div>
       <div class="memory-hall-shell">
         <aside class="memory-hall-side">
-          <button data-memory-tab="core" class="active">
-            <strong>长期记忆</strong>
-            <span id="memoryCoreCount">0 条</span>
+          <button data-memory-tab="profile" class="active">
+            <strong>用户画像</strong>
+            <span id="memoryProfileCount">0 条</span>
           </button>
-          <button data-memory-tab="episodic">
-            <strong>上下文摘要</strong>
-            <span id="memoryEpisodicCount">0 条</span>
+          <button data-memory-tab="fact">
+            <strong>事实</strong>
+            <span id="memoryFactCount">0 条</span>
           </button>
-          <button data-memory-tab="growth">
-            <strong>陪伴状态</strong>
-            <span>设计中</span>
+          <button data-memory-tab="event">
+            <strong>事件</strong>
+            <span id="memoryEventCount">0 条</span>
+          </button>
+          <button data-memory-tab="lesson">
+            <strong>经验 / 决策</strong>
+            <span id="memoryLessonCount">0 条</span>
+          </button>
+          <button data-memory-tab="archive">
+            <strong>聊天档案</strong>
+            <span id="memoryArchiveCount">0 个会话</span>
+          </button>
+          <button data-memory-tab="review">
+            <strong>待审核</strong>
+            <span id="memoryReviewCount">0 条</span>
+          </button>
+          <button data-memory-tab="trash">
+            <strong>回收站</strong>
+            <span id="memoryTrashCount">0 条</span>
           </button>
         </aside>
         <main class="memory-hall-main">

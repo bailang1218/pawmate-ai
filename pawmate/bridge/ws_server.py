@@ -144,6 +144,8 @@ class WsChatServer:
         self._host = host
         self._port = port
         self._auth_token = str(auth_token or "").strip()
+        if not self._auth_token:
+            raise ValueError("WebSocket auth_token is required")
         self._bridge = EventBridge()
         self._server: Optional[websockets.WebSocketServer] = None
         self._thread: Optional[threading.Thread] = None
@@ -191,6 +193,8 @@ class WsChatServer:
             self._port,
             ping_interval=30,
             ping_timeout=10,
+            max_size=64 * 1024,
+            max_queue=16,
         )
         logger.info(f"WS 服务器已就绪")
         try:
@@ -274,9 +278,6 @@ class WsChatServer:
 
     async def _authorize_client(self, websocket) -> bool:
         """Validate the optional bearer token before any events are streamed."""
-        if not self._auth_token:
-            return True
-
         provided = self._extract_token(websocket)
         if provided and secrets.compare_digest(provided, self._auth_token):
             return True
@@ -321,16 +322,6 @@ class WsChatServer:
         if header_token:
             return header_token
 
-        path = str(getattr(websocket, "path", "") or "")
-        request = getattr(websocket, "request", None)
-        if not path and request is not None:
-            path = str(getattr(request, "path", "") or "")
-        if path:
-            query = parse_qs(urlparse(path).query)
-            for key in ("token", "auth_token"):
-                values = query.get(key) or []
-                if values:
-                    return str(values[0]).strip()
         return ""
 
     def stop(self):
