@@ -1,0 +1,1 @@
+"""ChatGPT bridge tool integration."""

@@ -1,0 +1,59 @@
+{
+  "name": "读取网页并校验标题",
+  "version": 1,
+  "description": "用于验证 PawMate 浏览器自动化 API 的只读工作流",
+  "status": "draft",
+  "inputs": {
+    "url": {
+      "type": "string",
+      "required": true,
+      "description": "要读取的 HTTP(S) 页面"
+    }
+  },
+  "steps": [
+    {
+      "id": "open_page",
+      "action": "browser.goto",
+      "params": {
+        "url": "{{inputs.url}}",
+        "visibility": "foreground",
+        "goal": "API 浏览器自动化测试"
+      }
+    },
+    {
+      "id": "read_page",
+      "action": "browser.read",
+      "params": {
+        "visibility": "foreground"
+      },
+      "retry": {
+        "max_attempts": 2,
+        "backoff_ms": 500,
+        "retry_on": [
+          "timeout",
+          "browser_dependency_error"
+        ]
+      }
+    },
+    {
+      "id": "title_exists",
+      "action": "browser.assert",
+      "params": {
+        "observe": true,
+        "condition": {
+          "left": "{{page.title}}",
+          "op": "truthy"
+        },
+        "message": "页面标题为空"
+      }
+    },
+    {
+      "id": "extract_content",
+      "action": "browser.extract",
+      "params": {
+        "query": "页面正文",
+        "visibility": "foreground"
+      }
+    }
+  ]
+}

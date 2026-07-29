@@ -29,4 +29,3 @@ class BrowserSurface:
             target=target if target is not None else self.target,
             modality=modality if modality is not None else self.modality,
         )
-

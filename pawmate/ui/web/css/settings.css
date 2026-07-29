@@ -8,7 +8,7 @@
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
-  z-index: 100;
+  z-index: 3000;
 }
 
 .settings-overlay.open {
@@ -28,7 +28,7 @@
   border: 1px solid rgba(186, 230, 253, 0.75);
   border-radius: 20px;
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.14);
-  z-index: 110;
+  z-index: 3010;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -467,6 +467,29 @@
 }
 .logs-actions button:hover { background: var(--ai-bubble); }
 .logs-actions .logs-clear { color: #c94949; border-color: #f0c2c2; }
+.logs-tabs {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f6fbfd;
+}
+.logs-tab {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.logs-tab.active {
+  background: var(--ai-bubble);
+  color: var(--brand-dark);
+  font-weight: 700;
+}
 .logs-meta {
   padding: 8px 10px;
   border: 1px solid var(--border);

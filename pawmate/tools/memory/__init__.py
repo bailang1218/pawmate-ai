@@ -1,0 +1,1 @@
+"""Memory tool registration."""

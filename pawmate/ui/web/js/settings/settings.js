@@ -33,6 +33,7 @@ window.PawSettings = (function () {
     isOpen: false,
     setupMessage: null,
     uiLang: "zh-CN",
+    logKind: "operations",
   };
 
   /* ── References ────────────────────────────────── */
@@ -226,7 +227,7 @@ window.PawSettings = (function () {
   // Section switching
   // ================================================================
 
-  const VALID_SECTIONS = ["general", "llm", "browser", "tools", "security", "logs", "about"];
+  const VALID_SECTIONS = ["general", "llm", "tools", "security", "logs", "about"];
 
   function _updateActiveTab(section) {
     document.querySelectorAll(".nav-btn").forEach(function (btn) {
@@ -252,7 +253,6 @@ window.PawSettings = (function () {
     switch (section) {
       case "general":  renderGeneralSection(container, cfg);  applyI18n(container); break;
       case "llm":      renderLLMSection(container, cfg);      applyI18n(container); break;
-      case "browser":  renderBrowserSection(container, cfg);  applyI18n(container); break;
       case "tools":    renderToolsSection(container, cfg);    applyI18n(container); break;
       case "security": renderSecuritySection(container, cfg); applyI18n(container); break;
       case "logs":
@@ -446,6 +446,14 @@ window.PawSettings = (function () {
     $id("saveLLMBtn").addEventListener("click", function () {
       const newProvider = normalizeProvider($id("cfgProvider").value);
       const apiKey = $id("cfgApiKey").value;
+      const normalizedApiKey = apiKey.trim();
+      if (normalizedApiKey && (
+        normalizedApiKey.length > 4096 ||
+        !/^[\x21-\x7E]+$/.test(normalizedApiKey)
+      )) {
+        showToast("API 密钥格式无效：请只粘贴服务商提供的 Key，不要粘贴日志或整段文字。", "error");
+        return;
+      }
       const selectedModel = $id("cfgModelSelect").value;
       const model = selectedModel === CUSTOM_MODEL_VALUE
         ? ($id("cfgCustomModel").value.trim() || defaultModelFor(newProvider))
@@ -458,70 +466,6 @@ window.PawSettings = (function () {
       if (apiKey.trim()) settingsState.setupMessage = null;
       renderSection(settingsState.currentSection);
       applyI18n($id("settingsDrawer"));
-      saveConfig(__("settings_saved"));
-    });
-  }
-
-  function renderBrowserSection(container, cfg) {
-    const bu = (cfg.tools || {}).browser_use || {};
-    const browser = bu.browser || "edge";
-    const attachMode = Object.prototype.hasOwnProperty.call(ATTACH_MODE_LABELS, bu.attach_mode) ? bu.attach_mode : "auto";
-    const automationLevel = normalizedAutomationLevel(bu.automation_level || "standard");
-    const rawProfileDirectory = String(bu.profile_directory || "auto").trim() || "auto";
-    const profileDirectory = rawProfileDirectory === "managed" ? "managed" : "auto";
-    const advancedProfileDirectory = Object.prototype.hasOwnProperty.call(PROFILE_LABELS, rawProfileDirectory) ? "" : rawProfileDirectory;
-    const browserLabels = { auto: __("auto"), edge: __("browserEdge"), chrome: __("browserChrome") };
-
-    container.innerHTML = [
-      '<h3 data-i18n="sectionBrowser">浏览器自动化</h3>',
-      '<div class="checkbox-group">',
-      '  <input type="checkbox" id="cfgBrowserEnabled"' + (bu.enabled !== false ? " checked" : "") + " />",
-      '  <label for="cfgBrowserEnabled" data-i18n="enableBrowserAutomation">启用浏览器自动化</label>',
-      "</div>",
-      _fieldSelect("selBrowser", "cfgBrowserType", __("browser"), browser, browserLabels),
-      _fieldSelect("selAttach", "cfgAttachMode", __("attachMode"), attachMode, ATTACH_MODE_LABELS),
-      _fieldSelect("selAutomationLevel", "cfgAutomationLevel", __("automationLevel"), automationLevel, AUTOMATION_LEVEL_LABELS),
-      _fieldSelect("selProfileDir", "cfgProfileDir", __("profileDirectory"), profileDirectory, PROFILE_LABELS),
-      '<div class="checkbox-group">',
-      '  <input type="checkbox" id="cfgBrowserHeadless"' + (bu.headless ? " checked" : "") + " />",
-      '  <label for="cfgBrowserHeadless" data-i18n="headlessMode">静默后台运行</label>',
-      "</div>",
-      '<p class="field-hint" data-i18n="headlessModeHint">运行时不显示浏览器窗口</p>',
-      '<details class="settings-subsection browser-advanced-section">',
-      '  <summary data-i18n="advancedSettings">高级</summary>',
-      '  <div class="checkbox-group">',
-      '    <input type="checkbox" id="cfgUseCDP"' + (bu.cdp_url ? " checked" : "") + " />",
-      '    <label for="cfgUseCDP" data-i18n="useCustomCdpUrl">手动指定浏览器调试地址</label>',
-      "  </div>",
-      '  <div class="field-group"><label data-i18n="cdpUrl">浏览器调试地址（CDP）</label>',
-      '    <input type="text" id="cfgCdpUrl" value="' + esc(bu.cdp_url || "") + '" placeholder="' + esc(__("cdpUrlPlaceholder")) + '" />',
-      '    <p class="field-hint" data-i18n="cdpUrlHint">一般无需填写，仅当你手动以调试模式启动了浏览器时使用。</p></div>',
-      '  <div class="field-group"><label data-i18n="timeoutSeconds">超时时间（秒）</label>',
-      '    <input type="text" id="cfgBrowserTimeout" value="' + (bu.timeout || 180) + '" /></div>',
-      '  <div class="field-group"><label data-i18n="advancedProfileDirectory">高级登录状态值</label>',
-      '    <input type="text" id="cfgAdvancedProfileDir" value="' + esc(advancedProfileDirectory) + '" placeholder="native / C:\\\\Path\\\\To\\\\Profile" />',
-      '    <p class="field-hint" data-i18n="advancedProfileDirectoryHint">一般留空。只有需要指定 native 或自定义用户目录时才填写。</p></div>',
-      "</details>",
-      '<button class="save-btn" id="saveBrowserBtn" data-i18n="saveBrowserConfig">保存浏览器配置</button>',
-    ].join("\n");
-
-    wireCustomSelect("selBrowser", "cfgBrowserType");
-    wireCustomSelect("selAttach", "cfgAttachMode");
-    wireCustomSelect("selAutomationLevel", "cfgAutomationLevel");
-    wireCustomSelect("selProfileDir", "cfgProfileDir");
-
-    $id("saveBrowserBtn").addEventListener("click", function () {
-      const t = (settingsState.config.tools = settingsState.config.tools || {});
-      t.browser_use = t.browser_use || {};
-      const b = t.browser_use;
-      b.enabled = $id("cfgBrowserEnabled").checked;
-      b.browser = $id("cfgBrowserType").value;
-      b.headless = $id("cfgBrowserHeadless").checked;
-      b.timeout = parseInt($id("cfgBrowserTimeout").value) || 180;
-      b.attach_mode = customSelectStorageValue("selAttach", "cfgAttachMode", ATTACH_MODE_LABELS, "auto");
-      b.automation_level = customSelectStorageValue("selAutomationLevel", "cfgAutomationLevel", AUTOMATION_LEVEL_LABELS, "standard");
-      b.cdp_url = $id("cfgUseCDP").checked ? $id("cfgCdpUrl").value : "";
-      b.profile_directory = ($id("cfgAdvancedProfileDir").value || "").trim() || customSelectStorageValue("selProfileDir", "cfgProfileDir", PROFILE_LABELS, "auto");
       saveConfig(__("settings_saved"));
     });
   }
@@ -639,12 +583,17 @@ window.PawSettings = (function () {
       '  <div class="logs-head">',
       '    <div>',
       '      <h3>日志</h3>',
-      '      <p class="field-hint">记录 PawMate 操作、模型调用状态、工具执行和 I/O 输出。</p>',
+      '      <p class="field-hint">操作日志记录用户动作和工具结果；网关日志记录模型、桥接和流式诊断。</p>',
       '    </div>',
       '    <div class="logs-actions">',
       '      <button class="memory-refresh-button" id="logsRefreshBtn">刷新</button>',
       '      <button class="memory-refresh-button logs-clear" id="logsClearBtn">清空</button>',
       '    </div>',
+      '  </div>',
+      '  <div class="logs-tabs" id="logsKindTabs">',
+      '    <button class="logs-tab" data-log-kind="operations">操作日志</button>',
+      '    <button class="logs-tab" data-log-kind="gateway">网关日志</button>',
+      '    <button class="logs-tab" data-log-kind="app">全部日志</button>',
       '  </div>',
       '  <div class="logs-meta" id="logsMeta">加载中...</div>',
       '  <pre class="logs-viewer" id="logsViewer">加载中...</pre>',
@@ -654,12 +603,41 @@ window.PawSettings = (function () {
     $id("logsRefreshBtn").addEventListener("click", loadLogs);
     $id("logsClearBtn").addEventListener("click", function () {
       const cb = getConfigBridge();
-      if (!cb || typeof cb.clearAppLogs !== "function") return;
+      if (!cb) return;
+      const kind = settingsState.logKind || "operations";
+      const clearFn = typeof cb.clearAppLogsByKind === "function" ? cb.clearAppLogsByKind.bind(cb) : null;
+      if (clearFn) {
+        clearFn(kind, function () {
+          loadLogs();
+        });
+        return;
+      }
+      if (typeof cb.clearAppLogs !== "function") return;
       cb.clearAppLogs(function () {
         loadLogs();
       });
     });
+    const tabs = $id("logsKindTabs");
+    if (tabs) {
+      tabs.addEventListener("click", function (event) {
+        const btn = event.target.closest("[data-log-kind]");
+        if (!btn) return;
+        settingsState.logKind = btn.getAttribute("data-log-kind") || "operations";
+        updateLogTabs();
+        loadLogs();
+      });
+    }
+    updateLogTabs();
     loadLogs();
+  }
+
+  function updateLogTabs() {
+    const tabs = $id("logsKindTabs");
+    if (!tabs) return;
+    const kind = settingsState.logKind || "operations";
+    tabs.querySelectorAll("[data-log-kind]").forEach(function (btn) {
+      btn.classList.toggle("active", btn.getAttribute("data-log-kind") === kind);
+    });
   }
 
   function loadLogs() {
@@ -667,12 +645,14 @@ window.PawSettings = (function () {
     const viewer = $id("logsViewer");
     const cb = getConfigBridge();
     if (!meta || !viewer) return;
-    if (!cb || typeof cb.getAppLogs !== "function") {
+    if (!cb || (typeof cb.getAppLogsByKind !== "function" && typeof cb.getAppLogs !== "function")) {
       meta.textContent = "日志接口未就绪";
       viewer.textContent = "";
       return;
     }
-    cb.getAppLogs("500", function (raw) {
+    updateLogTabs();
+    const kind = settingsState.logKind || "operations";
+    const onLogs = function (raw) {
       let data = {};
       try { data = JSON.parse(raw || "{}"); }
       catch (e) { data = { error: "日志解析失败" }; }
@@ -685,7 +665,12 @@ window.PawSettings = (function () {
       meta.textContent = (data.path || "") + " · " + size + (data.modified_label ? " · " + data.modified_label : "");
       viewer.textContent = data.text || "暂无日志";
       viewer.scrollTop = viewer.scrollHeight;
-    });
+    };
+    if (typeof cb.getAppLogsByKind === "function") {
+      cb.getAppLogsByKind(kind, "500", onLogs);
+    } else {
+      cb.getAppLogs("500", onLogs);
+    }
   }
 
   function _updateSandboxUI(val) {

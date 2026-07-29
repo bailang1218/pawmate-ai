@@ -39,6 +39,21 @@ window.PawToolCards = (function () {
     catch (e) { return null; }
   }
 
+  function isNativeWebSearch(toolName) {
+    return String(toolName || "") === "native_web_search";
+  }
+
+  function normalizeNativeSearchResult(raw) {
+    const payload = extractToolPayload(raw);
+    let data = payload.detail;
+    if (typeof data === "string") data = parseMaybeJson(data) || data;
+    if (!data || typeof data !== "object") return null;
+    if (data.operation !== "native_web_search" && !Object.prototype.hasOwnProperty.call(data, "answer")) {
+      return null;
+    }
+    return data;
+  }
+
   function oneLine(text, max) {
     const s = String(text == null ? "" : text).replace(/\s+/g, " ").trim();
     if (!s) return "";
@@ -51,12 +66,30 @@ window.PawToolCards = (function () {
     return m ? m[0] : "";
   }
 
-  function extractScriptHint(script) {
-    const lines = String(script || "").split(/\n|\\n/).map((line) =>
-      line.replace(/^["'\s]*\/\/\s?/, "").trim()
-    ).filter(Boolean);
-    const comment = lines.find((line) => /[\u4e00-\u9fa5]|extract|find|query|search|读取|提取|查找/.test(line));
-    return oneLine(comment || lines[0] || "", 96);
+  function sourceUrl(source) {
+    if (!source || typeof source !== "object") return "";
+    const value = source.url || source.href || source.link || source.source_url || source.web_url || "";
+    const url = String(value || "").trim();
+    return /^https?:\/\//i.test(url) ? url : "";
+  }
+
+  function sourceDomain(url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, "");
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function openExternalUrl(url) {
+    const target = String(url || "").trim();
+    if (!/^https?:\/\//i.test(target)) return;
+    const wb = window.windowBridge;
+    if (wb && typeof wb.openExternalUrl === "function") {
+      wb.openExternalUrl(target);
+      return;
+    }
+    window.open(target, "_blank", "noopener,noreferrer");
   }
 
   function readableTarget(data) {
@@ -111,6 +144,19 @@ window.PawToolCards = (function () {
       desc.title = kind === "running" ? "正在打开应用" : "应用已打开";
       desc.intent = url ? "我在打开网页：" + url : "我在启动本地应用：" + target;
       desc.plan = "先把目标打开到可操作状态，再继续读取或交互。";
+    } else if (name === "native_web_search") {
+      const query = oneLine(data.query || "", 140);
+      const provider = data.provider ? String(data.provider) : "";
+      const model = data.model ? String(data.model) : "";
+      const sources = Array.isArray(data.sources) ? data.sources.length : 0;
+      desc.title = kind === "running" ? "正在联网检索" : "联网检索完成";
+      desc.intent = query ? "我在用服务商原生联网检索：" + query : "我在检索公开实时资料。";
+      desc.plan = "这一步不打开浏览器、不使用登录态、不点击网页；只调用模型服务商的原生联网/grounding 能力。";
+      if (kind !== "running") {
+        desc.result = (provider || model || sources)
+          ? "返回自 " + [provider, model].filter(Boolean).join(" / ") + (sources ? "，来源 " + sources + " 条。" : "。")
+          : "联网检索已返回，摘要和来源会显示在步骤卡片里。";
+      }
     } else if (name === "open_url") {
       desc.title = kind === "running" ? "正在打开链接" : "链接已打开";
       desc.intent = "我在用默认浏览器打开链接：" + (data.url || "");
@@ -170,59 +216,23 @@ window.PawToolCards = (function () {
       desc.title = kind === "running" ? "正在下载文件" : "文件下载完成";
       desc.intent = "我在下载：" + (data.url || "目标文件");
       desc.plan = "下载完成后会确认本地文件位置；需要的话也会保存元数据。";
-    } else if (name === "browser_evaluate") {
-      const hint = extractScriptHint(data.script || "");
-      desc.title = kind === "running" ? "正在读取网页" : "网页读取完成";
-      desc.intent = "我在检查当前网页的结构、文本和可操作元素。";
-      desc.plan = hint && /[\u4e00-\u9fa5]/.test(hint)
-        ? "这一步的目标是：" + hint
-        : "我需要先理解页面上有什么，再决定下一步点击、填写或截图。";
-    } else if (name === "browser_navigate" || name === "browser_open") {
+    } else if (name === "browser_goto") {
       desc.title = kind === "running" ? "正在打开网页" : "网页已打开";
-      desc.intent = "我在让浏览器进入目标页面：" + (data.url || data.target || "");
-      desc.plan = "页面打开后，我会继续确认实际 URL 和页面内容，避免在错误页面上操作。";
-    } else if (name === "browser_type_and_search") {
-      const text = oneLine(data.text || data.query || "", 120);
-      desc.title = kind === "running" ? "正在输入并搜索" : "输入搜索已完成";
-      desc.intent = text ? "我在页面输入搜索内容：" + text : "我在当前页面输入内容并提交。";
-      desc.plan = "先用页面自己的输入框发起搜索，再根据结果页继续读取或筛选。";
-    } else if (name === "browser_click") {
-      desc.title = kind === "running" ? "正在点击页面元素" : "页面点击已完成";
-      desc.intent = "我在当前网页上点击一个目标元素。";
-      desc.plan = "通常会先观察页面或确认 selector，再执行点击，避免点错位置。";
-    } else if (name === "browser_click_download") {
-      desc.title = kind === "running" ? "正在点击并下载" : "点击下载已完成";
-      desc.intent = "我在网页上点击下载入口并等待浏览器保存文件。";
-      desc.plan = "这比只点链接更稳，可以确认真实下载事件和本地文件。";
-    } else if (name === "browser_fill_form") {
-      desc.title = kind === "running" ? "正在填写表单" : "表单填写已完成";
-      desc.intent = "我在把你提供的信息填入网页表单。";
-      desc.plan = "填写前会尽量使用稳定字段定位；涉及提交或敏感信息时按安全规则处理。";
-    } else if (name === "browser_observe") {
+      desc.intent = "我在让自动化浏览器进入目标页面：" + (data.url || "");
+      desc.plan = "页面打开后会读取真实 URL 和 DOM 状态，不在错误页面上继续操作。";
+    } else if (name === "browser_read") {
       desc.title = kind === "running" ? "正在观察页面" : "页面观察完成";
       desc.intent = "我在识别页面上有哪些按钮、输入框和可点击元素。";
-      desc.plan = "先拿到可靠的页面元素列表，再决定下一步点击或填写。";
-    } else if (name === "browser_search") {
-      const query = oneLine(data.query || "", 120);
-      desc.title = kind === "running" ? "正在搜索资料" : "搜索完成";
-      desc.intent = query ? "我在搜索：" + query : "我在搜索相关资料。";
-      desc.plan = "先找可用信息源，再打开或总结最相关的结果。";
-    } else if (name === "browser_current_page") {
-      desc.title = kind === "running" ? "正在确认当前页面" : "当前页面已确认";
-      desc.intent = "我在确认工具实际控制的是哪个浏览器页面。";
-      desc.plan = "这能避免看到的是一个页面、操作却落在另一个页面。";
-    } else if (name === "browser_screenshot") {
-      desc.title = kind === "running" ? "正在截图" : "截图已完成";
-      desc.intent = "我在保存当前页面截图。";
-      desc.plan = "截图会作为视觉识别或问题定位的输入。";
-    } else if (name === "browser_scroll") {
-      desc.title = kind === "running" ? "正在滚动页面" : "页面滚动完成";
-      desc.intent = "我在滚动当前网页以查看后续内容。";
-      desc.plan = "先让目标区域进入视野，再继续读取、截图或点击。";
-    } else if (name === "browser_close") {
-      desc.title = kind === "running" ? "正在关闭浏览器会话" : "浏览器会话已处理";
-      desc.intent = "我在按指定范围关闭浏览器会话。";
-      desc.plan = "默认只处理当前会话，避免误关你已经登录好的页面。";
+      desc.plan = "先获取当前 DOM 引用，再执行有界操作；引用失效时只恢复一次。";
+    } else if (name === "browser_act") {
+      var action = data.action || "click";
+      desc.title = kind === "running" ? "正在操作网页" : "网页操作完成";
+      desc.intent = "我在执行网页动作：" + action + (data.intent ? "（" + data.intent + "）" : "");
+      desc.plan = "动作经过风险分类，并优先使用当前 DOM 引用，不进行坐标盲点。";
+    } else if (name === "browser_extract") {
+      desc.title = kind === "running" ? "正在提取网页内容" : "网页内容提取完成";
+      desc.intent = data.query ? "我在提取：" + oneLine(data.query, 120) : "我在读取当前页面正文。";
+      desc.plan = "只读取当前受控页面，并对返回内容做长度限制。";
     } else if (name === "capture_screenshot") {
       desc.title = kind === "running" ? "正在截取屏幕" : "屏幕截图完成";
       desc.intent = "我在保存当前屏幕截图。";
@@ -235,14 +245,20 @@ window.PawToolCards = (function () {
       desc.title = kind === "running" ? "正在分析图片" : "图片分析完成";
       desc.intent = "我在根据你的问题分析图片内容。";
       desc.plan = "先读取图片中的界面、文字和关键对象，再组织成可用回答。";
-    } else if (name === "core_remember") {
+    } else if (name === "consider_memory") {
+      desc.title = kind === "running"
+        ? "正在判断是否值得记住"
+        : (data.activated ? "记忆已保存" : "已加入待审核记忆");
+      desc.intent = "我在判断这条信息是否长期稳定且以后有用：" + (data.predicate || "未命名条目");
+      desc.plan = oneLine(data.content || "", 160) || "只提名当前用户直接陈述、长期稳定且未来有复用价值的信息。";
+    } else if (name === "remember_memory" || name === "core_remember") {
       desc.title = kind === "running" ? "正在写入记忆" : "记忆已保存";
-      desc.intent = "我在保存长期记忆：" + (data.key || "未命名条目");
-      desc.plan = oneLine(data.value || "", 160) || "把这条信息保存为后续可用的上下文。";
-    } else if (name === "core_forget") {
+      desc.intent = "我在保存长期记忆：" + (data.predicate || data.key || "未命名条目");
+      desc.plan = oneLine(data.content || data.value || "", 160) || "把用户明确要求保留的原子信息写入记忆。";
+    } else if (name === "forget_memory" || name === "core_forget") {
       desc.title = kind === "running" ? "正在删除记忆" : "记忆删除完成";
-      desc.intent = "我在删除长期记忆：" + (data.key || "");
-      desc.plan = "这会移除过期或不该继续保留的信息。";
+      desc.intent = "我在把记忆移到回收站：" + (data.memory_id || data.key || "");
+      desc.plan = "软删除后不会参与召回，仍可从回收站恢复。";
     } else if (name === "take_note") {
       desc.title = kind === "running" ? "正在记录摘要" : "摘要已记录";
       desc.intent = "我在记录上下文摘要：" + (data.title || "未命名笔记");
@@ -250,7 +266,15 @@ window.PawToolCards = (function () {
     } else if (name === "search_memory") {
       desc.title = kind === "running" ? "正在检索记忆" : "记忆检索完成";
       desc.intent = "我在检索记忆：" + (data.query || "");
-      desc.plan = "从长期记忆和上下文摘要里查找相关内容。";
+      desc.plan = "只从画像、事实、事件和经验等原子记忆中查找。";
+    } else if (name === "search_history") {
+      desc.title = kind === "running" ? "正在深度检索历史" : "历史候选已找到";
+      desc.intent = "我在全部历史对话中检索：" + (data.query || "");
+      desc.plan = "先找会话和消息候选，再打开来源上下文核对细节。";
+    } else if (name === "open_history_context") {
+      desc.title = kind === "running" ? "正在打开历史原文" : "历史原文已读取";
+      desc.intent = "我在核对会话 " + (data.session_id || "") + " 的来源消息。";
+      desc.plan = "只展开命中位置附近的消息，不把整段历史塞进上下文。";
     } else if (name === "growth_status") {
       desc.title = kind === "running" ? "正在查看陪伴状态" : "陪伴状态已读取";
       desc.intent = "我在读取当前好感度、心情和关系阶段。";
@@ -395,18 +419,22 @@ window.PawToolCards = (function () {
 
   function toolVerb(toolName) {
     const name = String(toolName || "");
+    if (name === "native_web_search") return "Search";
     if (/^(read_|read$|list_|get_)/.test(name)) return "Read";
     if (/^(search_|find_)/.test(name)) return "Search";
     if (/^(run_|exec_|shell_|launch_)/.test(name) || name === "run_shell_command") return "Run";
     if (/^(browser_|native_browser_|open_url)/.test(name)) return "Browse";
     if (/^(download_)/.test(name)) return "Download";
     if (/^(write_|patch_|edit_|move_|create_|delete_)/.test(name)) return "Edit";
-    if (/^(core_remember|take_note|search_memory|core_forget)/.test(name)) return "Memory";
+    if (/^(remember_memory|consider_memory|forget_memory|search_history|open_history_context|core_remember|take_note|search_memory|core_forget)/.test(name)) return "Memory";
     return name || "Tool";
   }
 
   function toolTarget(toolName, inputData) {
     const data = inputData && typeof inputData === "object" ? inputData : {};
+    if (isNativeWebSearch(toolName)) {
+      return oneLine(data.query || data.text || "provider-native web search", 110);
+    }
     const target = readableTarget(data);
     if (target) {
       if (data.path || data.file || data.source || data.destination || data.destination_dir) {
@@ -547,6 +575,73 @@ window.PawToolCards = (function () {
     return title + "\n" + prettyJson(payload.detail);
   }
 
+  function renderNativeSearchPanel(row, detailText, kind) {
+    if (!row || !isNativeWebSearch(row.dataset.toolName)) return;
+    const existing = row.querySelector(".native-search-panel");
+    if (existing) existing.remove();
+    if (kind === "running") return;
+
+    const data = normalizeNativeSearchResult(detailText);
+    if (!data) return;
+
+    const panel = document.createElement("div");
+    panel.className = "native-search-panel";
+    if (kind === "error" || data.ok === false) panel.classList.add("is-error");
+
+    const meta = document.createElement("div");
+    meta.className = "native-search-meta";
+    const provider = [data.provider, data.model].filter(Boolean).join(" / ") || "provider-native search";
+    const sources = Array.isArray(data.sources) ? data.sources : [];
+    const attempts = Array.isArray(data.attempts) ? data.attempts : [];
+    meta.textContent = provider + (sources.length ? " · " + sources.length + " sources" : "");
+    if (attempts.length > 1) meta.textContent += " · fallback " + attempts.length + " attempts";
+    panel.appendChild(meta);
+
+    const answer = document.createElement("div");
+    answer.className = "native-search-answer";
+    answer.textContent = oneLine(data.answer || data.message || "检索已返回，详情里保留原始结果。", 360);
+    panel.appendChild(answer);
+
+    if (sources.length) {
+      const list = document.createElement("div");
+      list.className = "native-search-sources";
+      sources.slice(0, 4).forEach(function (source, index) {
+        const url = sourceUrl(source);
+        const domain = sourceDomain(url);
+        const item = document.createElement(url ? "button" : "span");
+        item.className = "native-search-source";
+        if (url) item.type = "button";
+        item.textContent = (index + 1) + ". " + oneLine(source.title || domain || source.snippet || "source", 82);
+        if (domain) item.textContent += " · " + domain;
+        item.title = [
+          (index + 1) + ". " + (source.title || domain || "source"),
+          url,
+          source.snippet || "",
+        ].filter(Boolean).join("\n");
+        if (url) {
+          item.dataset.sourceIndex = String(index + 1);
+          item.dataset.sourceUrl = url;
+          item.addEventListener("click", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            openExternalUrl(url);
+          });
+        }
+        list.appendChild(item);
+      });
+      panel.appendChild(list);
+    } else if (Array.isArray(data.attempts) && data.attempts.length) {
+      const attemptsLine = document.createElement("div");
+      attemptsLine.className = "native-search-attempts";
+      attemptsLine.textContent = "Attempts: " + data.attempts.map(function (item) {
+        return [item.provider, item.status].filter(Boolean).join(":");
+      }).join(" → ");
+      panel.appendChild(attemptsLine);
+    }
+
+    row.appendChild(panel);
+  }
+
   function appendStepRow(toolId, toolName, inputData, turnId) {
     const activity = ensureActivityGroup(turnId);
     if (!activity) return null;
@@ -554,6 +649,7 @@ window.PawToolCards = (function () {
     const id = toolId || "step-" + (++_stepSeq);
     const input = inputData && typeof inputData === "object" ? inputData : {};
     row.className = "step-row is-running";
+    if (isNativeWebSearch(toolName)) row.classList.add("is-native-search");
     row.dataset.toolId = id;
     row.dataset.toolName = String(toolName || "");
     row.dataset.fallbackSeq = String(_stepSeq);
@@ -614,6 +710,7 @@ window.PawToolCards = (function () {
     if (glyph) glyph.textContent = kind === "error" ? "✕" : "✓";
     const detail = row.querySelector(".step-detail pre");
     if (detail) detail.textContent = truncateDetail(rowDetailText(toolName, detailText, status));
+    renderNativeSearchPanel(row, detailText, kind);
     updateActivitySummary(activity, false);
     PawChat.scrollToBottom();
     return row;
@@ -812,6 +909,10 @@ window.PawToolCards = (function () {
     ].join("");
 
     document.body.appendChild(overlay);
+    if (window.PawWorkspace &&
+        typeof window.PawWorkspace.setBrowserHostObscured === "function") {
+      window.PawWorkspace.setBrowserHostObscured(true);
+    }
     PawChat.scrollToBottom();
 
     // ── 清理函数：移除 overlay + 键盘监听 + 超时timer
@@ -826,6 +927,10 @@ window.PawToolCards = (function () {
       document.removeEventListener("keydown", onKeyDown);
       const el = document.getElementById("toolConfirmOverlay");
       if (el) el.remove();
+      if (window.PawWorkspace &&
+          typeof window.PawWorkspace.setBrowserHostObscured === "function") {
+        window.PawWorkspace.setBrowserHostObscured(false);
+      }
     }
 
     function onKeyDown(e) {

@@ -32,7 +32,7 @@ COLOR_TOOL_CARD = "#3d3d3d"
 # ============================================================================
 # LLM 配置
 # ============================================================================
-# LLM 提供商密钥、模型、System Prompt 统一配置 → pawmate.core.llm_factory
+# LLM 提供商密钥、模型、System Prompt 统一配置 → pawmate.core.model.llm_factory
 
 # Fallback 链：主提供商失败时按顺序尝试备选
 FALLBACK_PROVIDERS = os.getenv("FALLBACK_PROVIDERS", "deepseek,qwen,minimaxi").split(",")
@@ -50,4 +50,6 @@ WS_PORT = 18765  # Live2D WebSocket 端口
 # ============================================================================
 # 工具与 MCP 配置
 # ============================================================================
-MCP_SERVER_TIMEOUT = 30  # MCP 子进程启动超时（秒）
+# MCP is opt-in via PAWMATE_ENABLE_MCP=1. The built-in gateway is the default
+# startup path because it covers the primary local tools without a subprocess.
+MCP_SERVER_TIMEOUT = 8  # MCP subprocess startup timeout in seconds.

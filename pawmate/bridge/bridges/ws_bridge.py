@@ -16,7 +16,7 @@ from pawmate.bridge.contracts import (
     ToolNotifyEvent,
     ToolStartEvent,
 )
-from pawmate.core.redaction import redact_text
+from pawmate.core.safety.redaction import redact_text
 
 
 class WsInboundType(str, Enum):

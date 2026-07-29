@@ -341,7 +341,8 @@ function initSkillsHall() {
         if (isRdy) {
           h += '<button class="hall-btn hall-btn-warn" data-hall-action="disable" data-slug="' + ctx.escapeHtml(s.slug) + '">' + __("skillsDisable") + '</button>';
         } else {
-          h += '<button class="hall-btn hall-btn-prime" data-hall-action="enable" data-slug="' + ctx.escapeHtml(s.slug) + '" ' + ((s.status==="needs_review"||s.status==="needs_setup")?'title="' + ctx.escapeHtml(__("skillsNeedsReviewTitle")) + '"':'') + '>' + __("skillsEnable") + '</button>';
+          var setupBlocked = s.status === "needs_setup";
+          h += '<button class="hall-btn hall-btn-prime" data-hall-action="enable" data-slug="' + ctx.escapeHtml(s.slug) + '" ' + (setupBlocked ? 'disabled ' : '') + ((s.status==="needs_review"||setupBlocked)?'title="' + ctx.escapeHtml(__("skillsNeedsReviewTitle")) + '"':'') + '>' + __("skillsEnable") + '</button>';
         }
       }
       h += '<button class="hall-btn hall-btn-danger" data-hall-action="uninstall" data-slug="' + ctx.escapeHtml(s.slug) + '">' + __("skillsUninstall") + '</button>';

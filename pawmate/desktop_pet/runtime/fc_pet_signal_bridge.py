@@ -92,15 +92,22 @@ class FCPetSignalBridge:
 
 def categorize_tool(tool_name: str) -> str:
     name = tool_name.lower()
+    if name == "native_web_search":
+        return "web_search"
     if name.startswith("browser_") or name in {"download_file", "download_with_metadata"}:
         return "external_io"
+    if name == "run_powershell_query":
+        return "local_read"
     if name in {"run_script", "run_shell_command", "write_file", "patch_file"}:
         return "side_effect"
     if name == "search_file":
         return "local_scan"
     if name in {"read_file", "read_text_file", "list_directory", "read_symbol"}:
         return "local_read"
-    if name in {"core_remember", "search_memory", "recall", "list_memories"}:
+    if name in {
+        "remember_memory", "consider_memory", "forget_memory", "search_memory", "search_history",
+        "open_history_context", "core_remember", "recall", "list_memories",
+    }:
         return "memory"
     return "generic"
 

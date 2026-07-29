@@ -115,4 +115,3 @@ class EscalationLadder:
             return LadderDecision(action="retry", reason="重截图重试定位", event=event)
         event = self._emit(EscalationEvent(current.label(), "(halt)", "vision_unlocated"))
         return LadderDecision(action="stop", reason="多次无法定位目标，停止并上报", event=event)
-

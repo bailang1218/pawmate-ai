@@ -1,7 +1,7 @@
 @import url("tokens.css");
 @import url("base.css");
-@import url("shell.css?v=20260604-window-hit");
-@import url("chat.css");
-@import url("settings.css?v=20260604-panels");
+@import url("shell.css?v=20260719-rail-migration");
+@import url("chat.css?v=20260723-avatar-bubbles");
+@import url("settings.css?v=20260719-panel-layer-fix");
 @import url("skills.css?v=20260604-panels");
 @import url("memory.css?v=20260604-panels");

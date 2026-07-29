@@ -1,1 +1,36 @@
--e .[dev]
+# PawMate AI 2.1 runtime dependencies
+
+# Desktop UI / Qt WebEngine
+PySide6>=6.7,<7
+
+# LLM providers and streaming HTTP clients
+httpx>=0.27,<1
+openai>=2.44,<3
+anthropic>=0.34,<1
+
+# Local tools, downloads, websocket bridge, scheduling
+aiohttp>=3.9,<4
+websockets>=16,<17
+APScheduler>=3.10,<4
+SQLAlchemy>=1.4,<3
+tzdata>=2024.1; platform_system == "Windows"
+mcp>=1.9,<2
+
+# Browser automation and native Windows integration
+# After installing dependencies, run: python -m playwright install chromium
+playwright>=1.45,<2
+psutil>=5.9
+pywin32>=306; platform_system == "Windows"
+
+# Vision / desktop pet assets
+Pillow>=12.2,<13
+numpy>=1.26,<3
+
+# Skill manifests / YAML frontmatter
+PyYAML>=6,<7
+
+# Test suite
+pytest>=9.1,<10
+pytest-asyncio>=0.23,<2
+import-linter>=2.1,<3
+pip-audit>=2.7,<3

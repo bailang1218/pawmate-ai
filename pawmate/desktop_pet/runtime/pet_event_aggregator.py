@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, Callable
 
 
 class PetSignalType(str, Enum):
@@ -47,7 +48,9 @@ class _TurnState:
     has_text: bool = False
     has_progress: bool = False
     work_committed: bool = False
+    work_started_at: float | None = None
     work_output_started: bool = False
+    last_frustrated_at: float | None = None
     light_tool_count: int = 0
     short_task_mode: str | None = None
     cancel_latched: bool = False
@@ -57,9 +60,12 @@ class PetEventAggregator:
     """Aggregate app/agent signals into a small desktop-pet event vocabulary."""
 
     LIGHT_TOOL_WORK_THRESHOLD = 3
+    LONG_WORK_SECONDS = 15.0
+    FRUSTRATION_COOLDOWN_SECONDS = 45.0
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] | None = None) -> None:
         self._turn = _TurnState()
+        self._clock = clock or time.monotonic
 
     def handle(self, signal: PetDataSignal) -> list[PetEventEmission]:
         signal_type = signal.signal_type
@@ -75,7 +81,7 @@ class PetEventAggregator:
             return [self._emit("sad", signal.turn_id, "user correction or scold")]
         if signal_type == PetSignalType.TURN_STARTED:
             self._turn = _TurnState(turn_id=signal.turn_id, active=True)
-            return [self._emit("thinking", signal.turn_id, "turn started")]
+            return []
         if signal_type == PetSignalType.SHORT_TASK:
             if self._is_cancelled(signal.turn_id):
                 return []
@@ -85,7 +91,7 @@ class PetEventAggregator:
             if self._turn.work_committed:
                 return [self._emit("processing", signal.turn_id, "short tool while working")]
             if self._turn.light_tool_count >= self.LIGHT_TOOL_WORK_THRESHOLD:
-                self._turn.work_committed = True
+                self._mark_work_started()
                 return [self._emit("task_start", signal.turn_id, "many light tools promoted to work")]
             return [self._emit("short_task", signal.turn_id, "short tool task")]
         if signal_type == PetSignalType.MEMORY_TASK:
@@ -94,14 +100,14 @@ class PetEventAggregator:
             self._turn.has_tool = True
             self._turn.short_task_mode = "memory"
             if self._turn.work_committed:
-                return [self._emit("thinking", signal.turn_id, "memory tool while working")]
+                return [self._emit("processing", signal.turn_id, "memory tool while working")]
             return [self._emit("memory_task", signal.turn_id, "memory tool task")]
         if signal_type == PetSignalType.TOOL_START:
             if self._is_cancelled(signal.turn_id):
                 return []
             first_tool = not self._turn.has_tool
             self._turn.has_tool = True
-            self._turn.work_committed = True
+            self._mark_work_started()
             return [
                 self._emit("task_start" if first_tool else "processing", signal.turn_id, "tool started")
             ]
@@ -116,8 +122,13 @@ class PetEventAggregator:
             if not self._turn.active:
                 return []
             self._turn.has_progress = True
-            self._turn.work_committed = True
-            return [self._emit("busy", signal.turn_id, "progress update")]
+            was_working = self._turn.work_committed
+            self._mark_work_started()
+            if not was_working:
+                return [self._emit("task_start", signal.turn_id, "progress started work")]
+            if self._should_show_frustrated():
+                return [self._emit("busy", signal.turn_id, "long-running work")]
+            return [self._emit("processing", signal.turn_id, "progress update")]
         if signal_type == PetSignalType.TOOL_ERROR:
             if self._is_cancelled(signal.turn_id):
                 return []
@@ -175,6 +186,24 @@ class PetEventAggregator:
             and turn_id is not None
             and self._turn.turn_id == turn_id
         )
+
+    def _mark_work_started(self) -> None:
+        self._turn.work_committed = True
+        if self._turn.work_started_at is None:
+            self._turn.work_started_at = self._clock()
+
+    def _should_show_frustrated(self) -> bool:
+        started_at = self._turn.work_started_at
+        if started_at is None:
+            return False
+        now = self._clock()
+        if now - started_at < self.LONG_WORK_SECONDS:
+            return False
+        last = self._turn.last_frustrated_at
+        if last is not None and now - last < self.FRUSTRATION_COOLDOWN_SECONDS:
+            return False
+        self._turn.last_frustrated_at = now
+        return True
 
     @staticmethod
     def _emit(event_name: str, turn_id: int | None, reason: str) -> PetEventEmission:

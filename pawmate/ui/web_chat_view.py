@@ -62,7 +62,9 @@ class WebChatView(QWidget):
 
     def __init__(self, parent=None, mock_mode: bool = False,
                  window_bridge: QObject | None = None,
-                 config_bridge: QObject | None = None):
+                 config_bridge: QObject | None = None,
+                 browser_automation_bridge: QObject | None = None,
+                 cli_bridge: QObject | None = None):
         super().__init__(parent)
         log = logging.getLogger("pawmate")
         log.info("[WebChatView] mock_mode=%s", mock_mode)
@@ -70,8 +72,11 @@ class WebChatView(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.bridge = WebBridge(self, mock_mode=mock_mode)
+        self._conv_manager = ConversationManager()
         self._window_bridge = window_bridge
         self._config_bridge = config_bridge
+        self._browser_automation_bridge = browser_automation_bridge
+        self._cli_bridge = cli_bridge
         self._startup_error: str | None = None
         self._channel: QWebChannel | None = None
         self._web_view = None
@@ -116,11 +121,19 @@ class WebChatView(QWidget):
         layout.addWidget(self._loading_label)
 
     def register_channel_object(self, name: str, obj: QObject) -> None:
-        """Register a QObject on the existing QWebChannel."""
+        """Register now or queue the object until QWebChannel exists."""
         log = logging.getLogger("pawmate")
         if self._channel is not None:
             self._channel.registerObject(name, obj)
             log.info("[WebChatView] registered channel object: %s", name)
+            return
+        self._pending_channel_objects = [
+            (queued_name, queued_obj)
+            for queued_name, queued_obj in self._pending_channel_objects
+            if queued_name != name
+        ]
+        self._pending_channel_objects.append((name, obj))
+        log.info("[WebChatView] queued channel object: %s", name)
 
     def showEvent(self, event):
         """Widget becomes visible — defer QWebEngine init to non-blocking timer."""
@@ -165,11 +178,12 @@ class WebChatView(QWidget):
         self._web_view.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
+        # Opaque WebEngine composition is required for stable Windows rendering.
         self._web_view.setAttribute(
-            Qt.WidgetAttribute.WA_TranslucentBackground, True
+            Qt.WidgetAttribute.WA_TranslucentBackground, False
         )
-        self._web_view.setAutoFillBackground(False)
-        self._web_view.page().setBackgroundColor(QColor(0, 0, 0, 0))
+        self._web_view.setAutoFillBackground(True)
+        self._web_view.page().setBackgroundColor(QColor("#f7fafc"))
 
         settings = self._web_view.settings()
         settings.setAttribute(
@@ -185,8 +199,15 @@ class WebChatView(QWidget):
             self._channel.registerObject("windowBridge", self._window_bridge)
         if self._config_bridge is not None:
             self._channel.registerObject("configBridge", self._config_bridge)
+        if self._browser_automation_bridge is not None:
+            self._channel.registerObject("browserAutomation", self._browser_automation_bridge)
+        if self._cli_bridge is not None:
+            self._channel.registerObject("cliBridge", self._cli_bridge)
+        for name, obj in self._pending_channel_objects:
+            self._channel.registerObject(name, obj)
+            log.info("[WebChatView] registered queued channel object: %s", name)
+        self._pending_channel_objects.clear()
         # Register conversationManager placeholder (engine wires via set_engine later)
-        self._conv_manager = ConversationManager()
         self._channel.registerObject("conversationManager", self._conv_manager)
         self._web_view.page().setWebChannel(self._channel)
         self._web_view.loadFinished.connect(self._on_load_finished)
@@ -209,6 +230,26 @@ class WebChatView(QWidget):
         self._startup_error = None
         self.load_ready.emit()
         logging.getLogger("pawmate").info("[WebChatView] Web UI loaded")
+
+    def recover_render_surface(self, remount: bool = False) -> None:
+        """Wake Chromium's native surface after minimize or app switching."""
+        web_view = self._web_view
+        if web_view is None:
+            return
+        if remount:
+            web_view.hide()
+            web_view.show()
+        web_view.updateGeometry()
+        web_view.update()
+        try:
+            web_view.page().runJavaScript(
+                "void document.documentElement.offsetHeight;"
+            )
+        except Exception:
+            logging.getLogger("pawmate").debug(
+                "[WebChatView] render-surface wakeup failed",
+                exc_info=True,
+            )
 
     def is_web_runtime_available(self) -> bool:
         return self._startup_error is None

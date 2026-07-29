@@ -44,7 +44,7 @@ def test_out_of_bounds():
 
 
 def test_point_inside_bbox_when_present():
-    raw = '{"ok": true, "confidence": 0.7, "point": {"x": 130, "y": 42}, "bbox": {"x": 100, "y": 30, "w": 60, "h": 24}}'
+    raw = '{"ok": true, "confidence": 0.8, "point": {"x": 130, "y": 42}, "bbox": {"x": 100, "y": 30, "w": 60, "h": 24}}'
     result = parse_locate_response(raw)
     assert result.ok
     assert result.bbox["x"] <= result.point["x"] <= result.bbox["x"] + result.bbox["w"]
@@ -71,4 +71,3 @@ def test_locate_happy_path():
 
     result = asyncio.run(locate("data:image/png;base64,xx", "btn", vision_call=fake))
     assert result.ok and result.point == {"x": 3, "y": 4}
-

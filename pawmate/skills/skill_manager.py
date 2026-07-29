@@ -4,6 +4,7 @@ Skill manager — high-level skill management operations.
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import shutil
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from pawmate.skills.skill_sources import VALID_STATUSES, is_valid_slug, is_valid_status
+from pawmate.skills.dependency_checker import check_skill_dependencies
 from pawmate.skills.skill_store import (
     load_installed_skills, save_installed_skills, register_skill,
     update_skill_status, get_skill_status, list_local_skills,
@@ -45,7 +47,28 @@ class SkillManager:
     # ------------------------------------------------------------------
 
     def list_skills(self) -> List[Dict[str, Any]]:
-        return list_local_skills(skills_dir=self._skills_dir)
+        items = list_local_skills(skills_dir=self._skills_dir)
+        changed = False
+        for item in items:
+            if item.get("status") != self.STATUS_READY:
+                continue
+            slug = str(item.get("slug") or "")
+            valid, _error = is_valid_slug(slug)
+            skill_path = self._skills_dir / slug / "SKILL.md"
+            expected = str(item.get("reviewed_sha256") or "").strip().lower()
+            actual = hashlib.sha256(skill_path.read_bytes()).hexdigest() if valid and skill_path.is_file() else ""
+            if expected and expected == actual:
+                continue
+            item["status"] = self.STATUS_NEEDS_REVIEW
+            warnings = list(item.get("warnings") or [])
+            warning = "Skill content changed or predates integrity review; review it again before enabling."
+            if warning not in warnings:
+                warnings.append(warning)
+            item["warnings"] = warnings
+            changed = True
+        if changed:
+            save_installed_skills(items, self._skills_dir / "skills.json")
+        return items
 
     def get_detail(self, slug: str) -> Optional[Dict[str, Any]]:
         for s in self.list_skills():
@@ -141,9 +164,32 @@ class SkillManager:
                 f"Cannot transition from '{current}' to '{new_status}'. "
                 f"Allowed: {sorted(allowed)}"
             )
+        if new_status == self.STATUS_READY:
+            detail = self.get_detail(slug) or {}
+            dependency_check = check_skill_dependencies(
+                {
+                    "env": list(detail.get("requires_env") or []),
+                    "binaries": list(detail.get("requires_binaries") or []),
+                }
+            )
+            if not dependency_check.get("ok", True):
+                raise ValueError("Skill dependencies are not satisfied")
         result = update_skill_status(slug, new_status, skills_dir=self._skills_dir)
         if result is None:
             raise ValueError(f"Skill '{slug}' not found")
+        if new_status == self.STATUS_READY:
+            skill_path = self._skills_dir / slug / "SKILL.md"
+            digest = hashlib.sha256(skill_path.read_bytes()).hexdigest()
+            items_path = self._skills_dir / "skills.json"
+            items = load_installed_skills(items_path)
+            for item in items:
+                if item.get("slug") != slug:
+                    continue
+                item["reviewed_sha256"] = digest
+                item["reviewed_at"] = datetime.now(timezone.utc).isoformat()
+                result = item
+                break
+            save_installed_skills(items, items_path)
         return result
 
     def review_skill(self, slug: str, approved: bool, notes: str = "") -> Dict[str, Any]:
