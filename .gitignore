@@ -18,7 +18,7 @@ data/
 quiz_app/data/*.sqlite3
 quiz_app/data/settings.json
 logs/
-downloads/
+/downloads/
 browser_profiles/
 .qtwebengine_data/
 
