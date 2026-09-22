@@ -4,6 +4,8 @@ import json
 import os
 import time
 
+import pytest
+
 from pawmate.bridge.cli_bridge import CliBridge, MAX_COMMAND_CHARS
 from pawmate.core.services.chat_service import ChatService
 from pawmate.qt_compat import QCoreApplication
@@ -20,9 +22,19 @@ def _wait_until(app: QCoreApplication, predicate, timeout: float = 6.0) -> bool:
     return bool(predicate())
 
 
-def test_cli_bridge_runs_a_real_persistent_shell_command(tmp_path):
+@pytest.fixture
+def persistent_shell(tmp_path):
     app = QCoreApplication.instance() or QCoreApplication([])
     bridge = CliBridge(working_directory=tmp_path)
+    try:
+        yield app, bridge
+    finally:
+        bridge.shutdown()
+        assert _wait_until(app, lambda: json.loads(bridge.getStatus())["state"] == "stopped")
+
+
+def test_cli_bridge_runs_a_real_persistent_shell_command(persistent_shell):
+    app, bridge = persistent_shell
     output: list[str] = []
     bridge.outputReady.connect(output.append)
 
@@ -33,7 +45,11 @@ def test_cli_bridge_runs_a_real_persistent_shell_command(tmp_path):
     accepted = json.loads(bridge.writeLine("echo pawmate-cli-smoke"))
     assert accepted["ok"] is True
     assert accepted["accepted"] is True
-    assert _wait_until(app, lambda: "pawmate-cli-smoke" in "".join(output))
+    # QProcess reports Running before PowerShell completes its cold startup.
+    # Keep requiring actual command output, with room for hosted Windows startup.
+    assert _wait_until(app, lambda: "pawmate-cli-smoke" in "".join(output), timeout=20.0), (
+        bridge.getStatus(), "".join(output)
+    )
 
     if os.name == "nt":
         expected = "\u4f1a\u8bdd\u4fdd\u7559"
@@ -56,7 +72,9 @@ def test_cli_bridge_runs_a_real_persistent_shell_command(tmp_path):
     start_banner = f"[CLI] {started['shell']} 已启动"
     assert _wait_until(app, lambda: "".join(output).count(start_banner) >= 2)
     bridge.writeLine("echo pawmate-cli-after-interrupt")
-    assert _wait_until(app, lambda: "pawmate-cli-after-interrupt" in "".join(output))
+    assert _wait_until(app, lambda: "pawmate-cli-after-interrupt" in "".join(output), timeout=20.0), (
+        bridge.getStatus(), "".join(output)
+    )
 
     bridge.shutdown()
     assert _wait_until(app, lambda: json.loads(bridge.getStatus())["state"] == "stopped")
