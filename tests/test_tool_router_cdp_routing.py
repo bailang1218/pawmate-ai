@@ -1,68 +1,48 @@
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pawmate.core.tool_router import route_tools_for_turn as R
+from pawmate.core.tools.tool_router import route_tools_for_turn
 
 
-ALL = [
+ALL = {
     "browser_goto",
     "browser_read",
     "browser_act",
     "browser_extract",
-    "open_url",
-    "download_file",
-    "vision_analyze",
+    "native_browser_click",
+    "native_web_search",
     "capture_screenshot",
-    "read_text_file",
-]
+    "run_shell_command",
+}
+BROWSER = {"browser_goto", "browser_read", "browser_act", "browser_extract"}
 
 
-def names(msg):
-    return R(msg, ALL).tool_names
+def test_browser_request_can_always_reach_registered_browser_facade():
+    route = route_tools_for_turn("open YouTube and show homepage recommendations", ALL)
+
+    assert route.kind == "browser_task"
+    assert route.tool_names == ALL
+    assert route.matched_tool_names == BROWSER
 
 
-def has_browser(s):
-    return any(t.startswith("browser_") for t in s)
+def test_all_tools_visible_does_not_change_browser_capability_match():
+    route = route_tools_for_turn("use my logged-in browser", ALL)
+
+    assert route.tool_names == ALL
+    assert route.matched_tool_names == BROWSER
+    assert "native_browser_click" not in route.matched_tool_names
+    assert "run_shell_command" not in route.matched_tool_names
 
 
-def full(s):
-    return s == set(ALL)
+def test_vision_and_shell_intents_keep_diagnostic_classification():
+    vision_route = route_tools_for_turn("take a screenshot", ALL)
+    shell_route = route_tools_for_turn("run a shell command", ALL)
 
-
-def run_checks(verbose=False):
-    failures = []
-
-    def ck(name, cond, info=""):
-        if verbose:
-            print(("PASS " if cond else "FAIL ") + name + ("  " + info if info else ""))
-        if not cond:
-            failures.append(name)
-
-    s = names("你打开抖音给第三个视频评论")
-    ck("普通浏览器任务→全量暴露", full(s) and has_browser(s), f"{sorted(s)}")
-    s = names("用我的原生浏览器登录态操作一下")
-    ck('"原生浏览器/登录态"→全量暴露', full(s) and has_browser(s), f"{sorted(s)}")
-    s = names("在我已经打开的 Edge 里操作")
-    ck('"已打开的Edge"→全量暴露', full(s) and has_browser(s), f"{sorted(s)}")
-    s = names("用 native_browser 盲操一下这个窗口")
-    ck('显式"盲操/native_browser"→全量但LLM不暴露native', full(s) and not any(t.startswith("native_browser_") for t in s), f"{sorted(s)}")
-    s = names("给我截个图看看屏幕")
-    ck("视觉截图→全量暴露", full(s), f"{sorted(s)}")
-    s = names("帮我从0装一个java环境")
-    ck("装java→全量暴露", full(s))
-    s = names("你好呀")
-    ck("闲聊→全量暴露", full(s))
-    return failures
-
-
-def test_tool_router_cdp_routing():
-    failures = run_checks()
-    assert not failures, failures
-
-
-if __name__ == "__main__":
-    fails = run_checks(verbose=True)
-    print("\n=== ", "ALL PASS" if not fails else f"{len(fails)} FAILED: {fails}")
-    sys.exit(1 if fails else 0)
+    assert vision_route.kind == "vision_task"
+    assert vision_route.tool_names == ALL
+    assert vision_route.matched_tool_names == {"capture_screenshot"}
+    assert shell_route.kind == "shell_task"
+    assert shell_route.tool_names == ALL
+    assert shell_route.matched_tool_names == {"run_shell_command"}

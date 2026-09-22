@@ -13,7 +13,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from pawmate.memory.memory_store import MemoryStore
-from pawmate.memory.embedding import HashingEmbeddingProvider
 
 logger = logging.getLogger("pawmate.memory.episodic")
 
@@ -21,7 +20,6 @@ logger = logging.getLogger("pawmate.memory.episodic")
 class EpisodicMemory:
     def __init__(self, store: MemoryStore):
         self.store = store
-        self._embedder = HashingEmbeddingProvider()
 
     @staticmethod
     def _meta(meta_str: str) -> Dict[str, Any]:
@@ -71,7 +69,6 @@ class EpisodicMemory:
                 (content, tags_str, json.dumps(metadata, ensure_ascii=False), now),
             )
             rowid = cur.lastrowid
-        self._upsert_embedding(rowid, content, tags_str, title)
         return rowid
 
     def _row_to_dict(self, row, *, include_score: bool = False) -> Dict[str, Any]:
@@ -108,7 +105,10 @@ class EpisodicMemory:
                 fts_items = [self._row_to_dict(r, include_score=True) for r in rows]
             except sqlite3.OperationalError:
                 fts_items = []
-        return self._merge_vector_results(query, fts_items, k)
+        for rank, item in enumerate(fts_items):
+            item["retrieval"] = "fts"
+            item["hybrid_score"] = max(0.2, 1.0 - rank * 0.08)
+        return fts_items[: max(1, int(k))]
 
     def _search_rows(self, query: str, k: int):
         return self.store._connect().execute(
@@ -151,14 +151,6 @@ class EpisodicMemory:
                 (content, int(rowid)),
             )
             changed = cur.rowcount > 0
-        if changed:
-            item = self.get(rowid)
-            self._upsert_embedding(
-                int(rowid),
-                content,
-                str(item.get("tags") or "") if item else "",
-                str(item.get("title") or "") if item else "",
-            )
         return changed
 
     def delete(self, rowid: int) -> bool:
@@ -170,56 +162,6 @@ class EpisodicMemory:
             )
             changed = cur.rowcount > 0
         if changed:
+            # Legacy feature-hash rows are derived data and no longer queried.
             self.store.delete_embedding(memory_type="episodic", memory_rowid=int(rowid))
         return changed
-
-    def _upsert_embedding(self, rowid: int, content: str, tags: str = "", title: str = "") -> None:
-        text = "\n".join(part for part in [title, tags, content] if part)
-        vector = self._embedder.embed(text)
-        self.store.upsert_embedding(
-            memory_type="episodic",
-            memory_rowid=int(rowid),
-            embedding_model=self._embedder.model_name,
-            vector=vector,
-        )
-
-    def _merge_vector_results(
-        self,
-        query: str,
-        fts_items: list[Dict[str, Any]],
-        k: int,
-    ) -> list[Dict[str, Any]]:
-        merged: dict[int, Dict[str, Any]] = {}
-        for rank, item in enumerate(fts_items):
-            rowid = int(item.get("rowid") or 0)
-            if not rowid:
-                continue
-            item = dict(item)
-            item["retrieval"] = "fts"
-            item["hybrid_score"] = 1.0 - min(rank, 10) * 0.05
-            merged[rowid] = item
-
-        query_vector = self._embedder.embed(query)
-        vector_hits = self.store.search_embeddings(
-            memory_type="episodic",
-            embedding_model=self._embedder.model_name,
-            query_vector=query_vector,
-            k=max(k, 8),
-        )
-        for rowid, score in vector_hits:
-            item = merged.get(rowid)
-            if item is None:
-                loaded = self.get(rowid)
-                if loaded is None:
-                    continue
-                item = dict(loaded)
-                item["retrieval"] = "vector"
-                merged[rowid] = item
-            elif item.get("retrieval") == "fts":
-                item["retrieval"] = "hybrid"
-            item["vector_score"] = score
-            item["hybrid_score"] = float(item.get("hybrid_score", 0.0)) + score
-
-        items = list(merged.values())
-        items.sort(key=lambda item: float(item.get("hybrid_score", 0.0)), reverse=True)
-        return items[: max(1, int(k))]

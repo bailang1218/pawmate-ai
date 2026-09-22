@@ -66,14 +66,14 @@ def _norm_bbox(bbox) -> Optional[dict]:
 
 def _in_bounds(point: dict, image_size: tuple[int, int]) -> bool:
     width, height = image_size
-    return 0 <= point["x"] <= width and 0 <= point["y"] <= height
+    return 0 <= point["x"] < width and 0 <= point["y"] < height
 
 
 def parse_locate_response(
     raw: str,
     *,
     image_size: Optional[tuple[int, int]] = None,
-    min_confidence: float = 0.4,
+    min_confidence: float = 0.75,
 ) -> LocateResult:
     """Parse a vision model response into LocateResult. Never returns prose."""
     if not raw or not raw.strip():
@@ -113,6 +113,15 @@ def parse_locate_response(
         )
     if image_size and not _in_bounds(norm_point, image_size):
         return LocateResult.fail("point_out_of_bounds", confidence=confidence)
+    if norm_bbox is not None:
+        if norm_bbox["w"] <= 0 or norm_bbox["h"] <= 0:
+            return LocateResult.fail("invalid_bbox", confidence=confidence)
+        if image_size:
+            width, height = image_size
+            if norm_bbox["x"] < 0 or norm_bbox["y"] < 0 or norm_bbox["x"] + norm_bbox["w"] > width or norm_bbox["y"] + norm_bbox["h"] > height:
+                return LocateResult.fail("bbox_out_of_bounds", confidence=confidence)
+        if not (norm_bbox["x"] <= norm_point["x"] <= norm_bbox["x"] + norm_bbox["w"] and norm_bbox["y"] <= norm_point["y"] <= norm_bbox["y"] + norm_bbox["h"]):
+            return LocateResult.fail("point_outside_bbox", confidence=confidence)
     return LocateResult(ok=True, point=norm_point, bbox=norm_bbox, confidence=confidence, reason="ok")
 
 
@@ -125,7 +134,7 @@ async def locate(
     *,
     vision_call: VisionCall,
     image_size: Optional[tuple[int, int]] = None,
-    min_confidence: float = 0.4,
+    min_confidence: float = 0.75,
     max_tokens: int = 512,
 ) -> LocateResult:
     """Locate target through the injected vision client call."""
@@ -135,4 +144,3 @@ async def locate(
     except Exception as exc:
         return LocateResult.fail(f"vision_call_error:{exc}")
     return parse_locate_response(raw, image_size=image_size, min_confidence=min_confidence)
-

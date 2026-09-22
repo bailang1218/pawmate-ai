@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pawmate.tools.browser_preflight import RawProc, infer_native_state, needs_graceful_restart
+from pawmate.tools.browser.preflight import RawProc, infer_native_state, needs_graceful_restart
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,8 +93,8 @@ def test_browser_preflight_managed_mode_never_restarts() -> None:
 
 
 def test_connect_or_launch_native_intent_downgrade(monkeypatch, tmp_path) -> None:
-    from pawmate.tools import playwright_browser as browser
-    from pawmate.tools import cdp_attach
+    from pawmate.tools.browser import playwright_runtime as browser
+    from pawmate.tools.browser import cdp as cdp_attach
 
     class FakeAppPaths:
         downloads_dir = tmp_path / "downloads"
@@ -127,7 +127,7 @@ def test_connect_or_launch_native_intent_downgrade(monkeypatch, tmp_path) -> Non
 
 
 def test_connect_or_launch_managed_profile_does_not_preflight(monkeypatch, tmp_path) -> None:
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     class FakeAppPaths:
         downloads_dir = tmp_path / "downloads"
@@ -172,7 +172,7 @@ def test_connect_or_launch_managed_profile_does_not_preflight(monkeypatch, tmp_p
 
 
 def test_browser_open_reports_native_intent_downgrade(monkeypatch) -> None:
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     async def fake_ensure_session(_visibility):
         raise browser.BrowserIntentDowngrade(
@@ -193,7 +193,7 @@ def test_browser_open_reports_native_intent_downgrade(monkeypatch) -> None:
 
 
 def test_browser_navigate_reports_native_intent_downgrade(monkeypatch) -> None:
-    from pawmate.tools import playwright_browser as browser
+    from pawmate.tools.browser import playwright_runtime as browser
 
     async def fake_get_active_page(*_args, **_kwargs):
         raise browser.BrowserIntentDowngrade(

@@ -5,7 +5,7 @@
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![License](https://img.shields.io/badge/license-Apache--2.0-green)
-![Tests](https://img.shields.io/badge/tests-72%20passing-brightgreen)
+[![CI](https://github.com/bailang1218/pawmate-ai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bailang1218/pawmate-ai/actions/workflows/ci.yml)
 
 PawMate AI 是一个带桌宠形态的 Windows 本地 AI Agent。它不只是聊天窗口，而是把自研 ReAct + Plan-and-Execute 运行时、多供应商 LLM 路由、本地工具、浏览器自动化、长期记忆和动画桌宠放进同一个 PySide6 桌面应用里。
 
@@ -93,7 +93,11 @@ pawmate/
   main.py                 Application bootstrap and runtime wiring
   app/                    Window and service wiring
   bridge/                 Qt/Web bridge contracts and websocket bridge
-  core/                   Agent engine, LLM routing, tools, prompts, security
+  core/runtime/           Agent loop, planning, checkpoints, and cancellation
+  core/model/             Model routing and provider integration
+  core/safety/            File, command, and tool permission checks
+  core/observability/     Tracing and runtime diagnostics
+  core/services/          Runtime service integration
   tools/                  Built-in tools, browser adapters, MCP bridge
   memory/                 Memory stores and summarization helpers
   storage/                Local config, history, and conversation stores
@@ -180,11 +184,12 @@ Do not commit API keys, tokens, logs, browser profiles, or chat history.
 
 ```powershell
 python -m pytest -q
+lint-imports
 ```
 
-当前公开包验证过 `72 passed`。测试主要覆盖路由、工具解析 holdback、浏览器封装、取消安全和桌宠动作逻辑。
+2026-09-22 在 Windows / Python 3.11 环境验证核心更新：`335 passed, 1 skipped`。跳过项属于未包含在公开包中的独立 `quiz_app`。测试覆盖运行时、模型路由、工具证据、浏览器封装、记忆、取消安全和桌宠动作逻辑；它们不替代真实模型 API 和完整 GUI 的人工验收。每次提交的结果见上方 CI。
 
-The current public package has been verified with `72 passed`. The included tests focus on routing, parser holdback, browser facade behavior, cancellation safety, and desktop-pet motion logic.
+The core update was checked on Windows / Python 3.11 on 2026-09-22: `335 passed, 1 skipped`. The skipped case belongs to the separate `quiz_app`, which is not included in this public package. Tests cover the runtime, model routing, tool evidence, browser facade, memory, cancellation, and pet motion; they do not replace live-provider or full GUI acceptance. See CI above for each revision's result.
 
 ## 安全模型 / Security Model
 

@@ -11,7 +11,8 @@ import logging
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
-from pawmate.core.redaction import redact_sensitive_data
+from pawmate.core.safety.redaction import redact_sensitive_data
+from pawmate.storage.app_paths import get_app_paths
 
 logger = logging.getLogger("pawmate.session")
 
@@ -23,7 +24,7 @@ class SessionStore:
 
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
-            db_path = Path.home() / ".pawmate" / "sessions.db"
+            db_path = get_app_paths().ensure_database_path()
         self.db_path = Path(db_path).expanduser().resolve()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._local = threading.local()

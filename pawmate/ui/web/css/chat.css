@@ -44,8 +44,8 @@
 .message-row {
   width: 100%;
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .message-row.user {
@@ -57,7 +57,27 @@
   justify-content: flex-start;
 }
 
-/* .avatar / .avatar.ai retired - replaced by .avatar-wrap.ai peek-out effect */
+/* Keep the assistant identity attached to the top of every reply. Long replies
+   used to push the flex-end aligned avatar below the visible viewport. */
+.message-row > .avatar-wrap.ai {
+  position: relative;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  margin-top: 2px;
+  overflow: hidden;
+  border: 1px solid rgba(93, 179, 207, 0.34);
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f7fdff, #dff4fb);
+  box-shadow: 0 3px 10px rgba(55, 132, 158, 0.16);
+}
+
+.message-row > .avatar-wrap.ai > .avatar-peek-img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
 
 .message-body {
   flex: 1;
@@ -65,6 +85,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.message-row > .bubble {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .bubble, .tool-card {
@@ -121,14 +146,17 @@
 .bubble.user {
   background: linear-gradient(145deg, #64b6d2, #5db3cf);
   color: #ffffff;
+  border: 1px solid rgba(65, 156, 187, 0.3);
   border-bottom-right-radius: 6px;
+  box-shadow: 0 4px 12px rgba(60, 143, 172, 0.16);
 }
 
 .bubble.assistant {
-  background: var(--ai-bubble);
+  background: linear-gradient(145deg, #f5fbfd, var(--ai-bubble));
   color: var(--text);
   border: 1px solid var(--border-strong);
   border-bottom-left-radius: 6px;
+  box-shadow: 0 4px 12px rgba(70, 130, 151, 0.1);
 }
 
 .message-time {
@@ -562,6 +590,80 @@
   font-size: 11.5px;
   line-height: 1.45;
   white-space: pre;
+}
+
+.step-row.is-native-search .step-glyph {
+  background: #e9f8ff;
+  color: #3a9fc4;
+}
+
+.native-search-panel {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 7px;
+  margin: 4px 0 7px;
+  padding: 9px 10px;
+  border: 1px solid rgba(77, 178, 214, 0.28);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(240, 250, 255, 0.96), rgba(248, 253, 255, 0.98));
+  color: var(--text);
+}
+
+.native-search-panel.is-error {
+  border-color: rgba(255, 126, 105, 0.35);
+  background: rgba(255, 245, 242, 0.9);
+}
+
+.native-search-meta {
+  color: #4d7f91;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.native-search-answer {
+  color: #2f4d58;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.native-search-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.native-search-source {
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid rgba(77, 178, 214, 0.25);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #3c7184;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-family: inherit;
+  line-height: 1.2;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+span.native-search-source {
+  cursor: default;
+}
+
+.native-search-source:hover {
+  border-color: rgba(77, 178, 214, 0.45);
+  color: #2d6478;
+}
+
+.native-search-attempts {
+  color: var(--text-muted);
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 @keyframes stepPulse {

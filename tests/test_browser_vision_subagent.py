@@ -20,7 +20,8 @@ def build(locate_script, *, verify=True, max_steps=4):
         state["shots"] += 1
         return "data:image/png;base64,xx", (800, 600)
 
-    async def locate_fn(data_url, target):
+    async def locate_fn(data_url, target, image_size):
+        assert image_size == (800, 600)
         index = state["locate_calls"]
         state["locate_calls"] += 1
         return sequence[index] if index < len(sequence) else fail_loc()
@@ -52,10 +53,11 @@ def test_unlocated_until_budget_then_structured_fail():
     assert state["clicks"] == []
 
 
-def test_bounded_no_infinite_loop():
+def test_click_is_never_repeated_when_target_remains_visible():
     agent, _state = build([ok_loc()] * 100, max_steps=3)
     result = asyncio.run(agent.run(target="x"))
-    assert result.steps <= 3 and not result.ok and result.final_state == "budget_exhausted"
+    assert result.steps == 1 and result.ok and result.final_state == "acted_unverified"
+    assert _state["clicks"] == [(10, 20)]
 
 
 def test_returns_only_structured_no_prose():
@@ -64,4 +66,3 @@ def test_returns_only_structured_no_prose():
     data = result.as_dict()
     assert set(data.keys()) == {"ok", "action_taken", "steps", "final_state", "reason"}
     assert all(not isinstance(value, str) or key in ("action_taken", "final_state", "reason") for key, value in data.items())
-

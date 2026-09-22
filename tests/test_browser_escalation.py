@@ -45,4 +45,3 @@ def test_every_transition_emits_typed_event():
     event = ladder.events[-1]
     assert event.from_surface and event.to_surface and event.reason
     assert set(event.as_dict().keys()) == {"from", "to", "reason", "evidence"}
-

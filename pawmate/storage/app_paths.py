@@ -7,6 +7,7 @@ lives under a single data root, defaulting to <project_root>/data/.
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Optional
 
@@ -85,6 +86,32 @@ class AppPaths:
         """Reserved for future QtWebEngine profile/cache migration."""
         return self.data_root / "qtwebengine"
 
+    @property
+    def browser_automation_dir(self) -> Path:
+        """Versioned browser workflows, run checkpoints, and traces."""
+        return self.data_root / "browser_automation"
+
+    @property
+    def database_path(self) -> Path:
+        """Shared SQLite database for conversations, memory, and scheduling."""
+        return self.data_root / "sessions.db"
+
+    def ensure_database_path(self) -> Path:
+        """Return the shared DB path, migrating the historical home DB once."""
+        target = self.database_path
+        legacy = (Path.home() / ".pawmate" / "sessions.db").resolve()
+        if target.exists() or not legacy.is_file() or target.resolve() == legacy:
+            return target
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source_conn = sqlite3.connect(str(legacy))
+        target_conn = sqlite3.connect(str(target))
+        try:
+            source_conn.backup(target_conn)
+        finally:
+            target_conn.close()
+            source_conn.close()
+        return target
+
     # ── Directory creation ────────────────────────────────────
 
     def ensure_dirs(self) -> None:
@@ -102,6 +129,7 @@ class AppPaths:
             "logs_dir",
             "downloads_dir",
             "qtwebengine_dir",
+            "browser_automation_dir",
         ):
             getattr(self, attr).mkdir(parents=True, exist_ok=True)
 
@@ -142,6 +170,13 @@ def get_app_paths(config: Optional[dict] = None) -> AppPaths:
     global _default_paths
     if _default_paths is None:
         _default_paths = AppPaths(config=config or {})
+    return _default_paths
+
+
+def configure_app_paths(config: Optional[dict] = None) -> AppPaths:
+    """Replace the process-wide paths after application config is loaded."""
+    global _default_paths
+    _default_paths = AppPaths(config=config or {})
     return _default_paths
 
 

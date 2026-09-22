@@ -11,6 +11,7 @@ from PySide6.QtCore import (
     QEvent,
     QObject,
     QPoint,
+    QProcess,
     QRect,
     QSize,
     QThread,
@@ -23,8 +24,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QBrush, QColor, QGuiApplication, QIcon, QPainter, QPen, QPixmap, QPolygon
 from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEngineSettings
-from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -43,6 +42,21 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def __getattr__(name: str):
+    """Lazy-load QtWebEngine symbols so app startup does not pay for Chromium."""
+    if name == "QWebEngineSettings":
+        from PySide6.QtWebEngineCore import QWebEngineSettings
+
+        globals()[name] = QWebEngineSettings
+        return QWebEngineSettings
+    if name == "QWebEngineView":
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+
+        globals()[name] = QWebEngineView
+        return QWebEngineView
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def qt_receiver_count(obj: QObject, signal, signature: str) -> int:
@@ -80,6 +94,7 @@ __all__ = [
     "QPixmap",
     "QPolygon",
     "QPoint",
+    "QProcess",
     "QPushButton",
     "QRect",
     "QSize",

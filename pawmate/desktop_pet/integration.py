@@ -491,20 +491,36 @@ def _loads_json_dict(text: str) -> dict[str, Any]:
 
 def _looks_hard(text: str) -> bool:
     lowered = text.lower()
-    hard_markers = (
+    strong_markers = (
         "\u600e\u4e48\u8bbe\u8ba1",
         "\u67b6\u6784",
         "\u590d\u6742",
         "\u96be",
-        "\u4e3a\u4ec0\u4e48",
+        "\u6839\u6e90",
         "\u539f\u7406",
         "\u7b97\u6cd5",
         "\u65b9\u6848",
-        "\u7cfb\u7edf",
-        "?",
-        "\uff1f",
+        "\u7cfb\u7edf\u6027",
+        "\u9c81\u68d2",
+        "\u6392\u67e5",
+        "debug",
+        "bug",
     )
-    return any(marker in lowered for marker in hard_markers)
+    if any(marker in lowered for marker in strong_markers):
+        return True
+    if "\u4e3a\u4ec0\u4e48" in lowered:
+        technical_markers = (
+            "\u70b8",
+            "\u62a5\u9519",
+            "\u5931\u8d25",
+            "\u4e2d\u65ad",
+            "\u5361",
+            "\u903b\u8f91",
+            "\u673a\u5236",
+            "\u539f\u56e0",
+        )
+        return any(marker in lowered for marker in technical_markers)
+    return False
 
 
 def _looks_repeat(text: str) -> bool:

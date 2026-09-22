@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pawmate.core.engine import AgentEngine, EngineState
+from pawmate.core.runtime.engine import AgentEngine, EngineState
 
 
 class FakeHistory:

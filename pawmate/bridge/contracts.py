@@ -21,6 +21,7 @@ class EventKind(str, Enum):
     HEARTBEAT_WARNING = "heartbeat_warning"
     PRESENCE_NUDGE = "presence_nudge"
     MAINTENANCE_TICK = "maintenance_tick"
+    MODEL_RUNTIME = "model_runtime"
     SCHEDULED_FIRED = "scheduled_fired"
     FINISHED = "finished"
     PROGRESS_UPDATE = "progress_update"
@@ -113,6 +114,13 @@ class MaintenanceTickEvent(AppEvent):
     payload_json: str
 
     kind: ClassVar[EventKind] = EventKind.MAINTENANCE_TICK
+
+
+@dataclass(frozen=True, slots=True)
+class ModelRuntimeEvent(AppEvent):
+    payload_json: str
+
+    kind: ClassVar[EventKind] = EventKind.MODEL_RUNTIME
 
 
 @dataclass(frozen=True, slots=True)

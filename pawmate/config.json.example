@@ -38,7 +38,8 @@
       "~"
     ],
     "sandbox_mode": "safe",
-    "qwebengine_disable_sandbox": false
+    "qwebengine_disable_sandbox": false,
+    "allow_browser_process_launch": false
   },
   "websocket": {
     "enabled": false,

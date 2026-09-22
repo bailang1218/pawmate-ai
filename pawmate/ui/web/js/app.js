@@ -28,6 +28,7 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
     canSend: false,
     bridgeSignalsBound: false,
     webChannelInitStarted: false,
+    fallbackBannerTimer: null,
   };
   const VALID_SETTINGS_TABS = ["general", "llm", "browser", "security", "logs", "about"];
   const appState = window.PawAppState;
@@ -44,6 +45,8 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
   function frontendTrace(kind, payload) {
     const bridge = state.bridge;
     if (!bridge || typeof bridge.frontendTrace !== "function") return;
+    const streamTraceEnabled = window.__PAWMATE_DEBUG_STREAM_TRACE__ === true;
+    if (!streamTraceEnabled && /^delta-/.test(String(kind || ""))) return;
     try {
       bridge.frontendTrace(JSON.stringify({
         kind: kind,
@@ -75,6 +78,11 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
     el.settingsBtn  = document.getElementById("settingsBtn");
     el.taskStopBtn  = document.getElementById("taskStopBtn");
     el.modePill     = document.getElementById("modePill");
+    el.modelMeter   = document.getElementById("modelMeter");
+    el.modelMeterName = document.getElementById("modelMeterName");
+    el.modelMeterTokens = document.getElementById("modelMeterTokens");
+    el.modelFallbackBanner = document.getElementById("modelFallbackBanner");
+    el.modelFallbackText = document.getElementById("modelFallbackText");
     el.desktopPetTopToggle = document.getElementById("desktopPetTopToggle");
     el.desktopPetTopCheckbox = document.getElementById("desktopPetTopCheckbox");
 
@@ -340,11 +348,105 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
   }
 
   /* ── Bridge binding ────────────────────────────── */
+  function formatTokenCount(value) {
+    var n = Number(value || 0);
+    if (!isFinite(n) || n <= 0) return "0";
+    if (n >= 1000000) {
+      return (n / 1000000).toFixed(n >= 10000000 ? 1 : 2).replace(/\.0+$/, "") + "m";
+    }
+    if (n >= 1000) {
+      return (n / 1000).toFixed(n >= 10000 ? 1 : 2).replace(/\.0+$/, "") + "k";
+    }
+    return String(Math.round(n));
+  }
+
+  function formatModelRuntimeLabel(data) {
+    var provider = String((data && data.provider) || "").trim();
+    var model = String((data && data.model) || "").trim();
+    if (provider && model) return provider + "/" + model;
+    if (model) return model;
+    if (provider) return provider;
+    return "\u6a21\u578b\u51c6\u5907\u4e2d";
+  }
+
+  function formatTokenUsageLabel(data) {
+    var usage = (data && data.usage) || {};
+    var turn = usage.turn || {};
+    var total = usage.total || {};
+    var last = usage.last || {};
+    var turnTokens = Number(turn.total_tokens || 0);
+    var totalTokens = Number(total.total_tokens || 0);
+    var estimated = !!(turn.estimated || total.estimated || last.estimated);
+    if (!turnTokens && !totalTokens) return "tokens 0";
+    var prefix = estimated ? "\u4f30\u7b97 " : "";
+    return prefix
+      + "\u672c\u8f6e " + formatTokenCount(turnTokens)
+      + " \u00b7 \u7d2f\u8ba1 " + formatTokenCount(totalTokens);
+  }
+
+  function formatProviderName(value) {
+    var text = String(value || "").trim();
+    if (!text) return "";
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  function applyProviderRuntimeEvent(data) {
+    var providerEvent = (data && data.provider_event) || {};
+    if (!providerEvent || providerEvent.event !== "provider_fallback_switch") return;
+    if (!el.modelFallbackBanner || !el.modelFallbackText) return;
+
+    var fromList = Array.isArray(providerEvent.after) ? providerEvent.after : [];
+    var fromProvider = formatProviderName(fromList.length ? fromList[fromList.length - 1] : "");
+    var toProvider = formatProviderName(providerEvent.provider || data.provider || "");
+    var inherited = providerEvent.context_inherited ? "\u00b7 \u672c\u8f6e\u4e0a\u4e0b\u6587\u5df2\u7ee7\u627f" : "";
+    var prefix = fromProvider && toProvider
+      ? "\u5df2\u7531 " + fromProvider + " \u5207\u5230 " + toProvider
+      : "\u5907\u7528\u6a21\u578b\u5df2\u63a5\u7ba1";
+    el.modelFallbackText.textContent = prefix + " " + inherited;
+    el.modelFallbackBanner.hidden = false;
+    el.modelFallbackBanner.title = providerEvent.reason
+      ? "\u63a5\u7ba1\u539f\u56e0: " + providerEvent.reason
+      : "\u5df2\u4f7f\u7528\u5907\u7528\u6a21\u578b\u63a5\u7ba1\u672c\u8f6e\u8bf7\u6c42";
+    if (el.modelMeter) {
+      el.modelMeter.classList.add("is-fallback");
+    }
+    if (state.fallbackBannerTimer) {
+      clearTimeout(state.fallbackBannerTimer);
+    }
+    state.fallbackBannerTimer = setTimeout(function () {
+      if (el.modelFallbackBanner) el.modelFallbackBanner.hidden = true;
+      if (el.modelMeter) el.modelMeter.classList.remove("is-fallback");
+      state.fallbackBannerTimer = null;
+    }, 8000);
+  }
+
+  function applyModelRuntime(payload) {
+    if (!el.modelMeterName || !el.modelMeterTokens) return;
+    var data = typeof payload === "string" ? parseBridgeJson(payload, {}) : (payload || {});
+    var label = formatModelRuntimeLabel(data);
+    var tokenLabel = formatTokenUsageLabel(data);
+    el.modelMeterName.textContent = label;
+    el.modelMeterTokens.textContent = tokenLabel;
+    if (el.modelMeter) {
+      el.modelMeter.title = label + "\n" + tokenLabel;
+      el.modelMeter.classList.toggle("is-estimated", tokenLabel.indexOf("\u4f30\u7b97") === 0);
+    }
+    applyProviderRuntimeEvent(data);
+  }
+
+  function refreshModelRuntime(bridge) {
+    if (!bridge || typeof bridge.getModelRuntime !== "function") return;
+    bridge.getModelRuntime(function (payload) {
+      applyModelRuntime(payload);
+    });
+  }
+
   function bindBridge(bridge) {
     if (state.bridgeSignalsBound || window.__PAWMATE_BRIDGE_SIGNALS_BOUND__) {
       log("bridge already bound, skipping duplicate signal handlers");
       state.bridge = bridge;
       frontendTrace("bind-skip", { reason: "already-bound" });
+      refreshModelRuntime(bridge);
       return;
     }
     state.bridge = bridge;
@@ -471,6 +573,9 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
     if (bridge.maintenanceTick) {
       bridge.maintenanceTick.connect((payload) => applyMaintenanceTick(payload));
     }
+    if (bridge.modelRuntimeChanged) {
+      bridge.modelRuntimeChanged.connect((payload) => applyModelRuntime(payload));
+    }
     if (bridge.planUpdate) {
       bridge.planUpdate.connect((payload) => PawToolCards.renderPlanChecklist(payload));
     }
@@ -482,6 +587,7 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
     appState.dispatch({ type: "BRIDGE_READY" });
     appState.dispatch({ type: "CHAT_STATUS", value: "starting..." });
     refreshBackendStatus(bridge);
+    refreshModelRuntime(bridge);
     log("bridge bound OK");
   }
 
@@ -513,6 +619,8 @@ console.log("[PawMate] version: " + window.__PAWMATE_WEB_VERSION__);
       const bridge = channel.objects.bridge;
       window.windowBridge = channel.objects.windowBridge;
       window.configBridge = channel.objects.configBridge;
+      window.browserAutomation = channel.objects.browserAutomation;
+      window.cliBridge = channel.objects.cliBridge;
       loadDesktopPetToggle();
 
       if (bridge) bindBridge(bridge);

@@ -5,13 +5,14 @@ from pawmate.bridge.contracts import (
     HeartbeatStatusEvent,
     HeartbeatWarningEvent,
     MaintenanceTickEvent,
+    ModelRuntimeEvent,
     PresenceNudgeEvent,
     TaskRunningChangedEvent,
     ToolConfirmEvent,
     TurnCancelledEvent,
 )
 from pawmate.bridge.event_bus import event_bus
-from pawmate.core.redaction import redact_text
+from pawmate.core.safety.redaction import redact_text
 
 
 _CONNECTED_SIGNAL_SLOTS: set[tuple[int, tuple[object, ...]]] = set()
@@ -69,6 +70,12 @@ def _relay_event_to_web_bridge(bridge, event) -> None:
         bridge.presenceNudge.emit(event.payload_json)
     elif isinstance(event, MaintenanceTickEvent):
         bridge.maintenanceTick.emit(event.payload_json)
+    elif isinstance(event, ModelRuntimeEvent):
+        relay = getattr(bridge, "relayModelRuntime", None)
+        if callable(relay):
+            relay(event.payload_json)
+        elif hasattr(bridge, "modelRuntimeChanged"):
+            bridge.modelRuntimeChanged.emit(event.payload_json)
     elif isinstance(event, TurnCancelledEvent):
         bridge.turnCancelled.emit(event.deleted_count)
     elif isinstance(event, TaskRunningChangedEvent):

@@ -9,13 +9,14 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
-from typing import Dict, Optional
+from collections.abc import Coroutine
+from typing import Any, Dict, Optional
 
 from pawmate.qt_compat import QThread, Signal
 
 from pawmate.bridge.contracts import ErrorEvent, FinishedEvent, TurnCancelledEvent
 from pawmate.bridge.event_bus import event_bus
-from pawmate.core.engine import AgentEngine
+from pawmate.core.runtime.engine import AgentEngine
 
 
 class AgentWorker(QThread):
@@ -32,6 +33,21 @@ class AgentWorker(QThread):
 
     def is_ready(self) -> bool:
         return bool(self._loop is not None and self._loop.is_running())
+
+    def submit_coroutine(self, coroutine: Coroutine[Any, Any, Any]) -> concurrent.futures.Future:
+        """Run non-chat async work on the worker's single event loop.
+
+        Browser automation uses this entry point so Playwright objects, locks,
+        and cancellation events never cross asyncio event loops or run on the
+        Qt GUI thread.
+        """
+        loop = self._loop
+        if loop is None or not loop.is_running():
+            coroutine.close()
+            future: concurrent.futures.Future = concurrent.futures.Future()
+            future.set_exception(RuntimeError("Worker loop is not running"))
+            return future
+        return asyncio.run_coroutine_threadsafe(coroutine, loop)
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -110,7 +126,7 @@ class AgentWorker(QThread):
                 future.cancel()
             deleted = 0
             try:
-                deleted = self._engine.cancel_current_turn()
+                deleted = self._engine.cancel_current_turn(target_turn_id)
             except Exception:
                 logging.getLogger("pawmate").exception("[Worker] cancel rollback failed")
             event_bus.publish(TurnCancelledEvent(deleted, turn_id=target_turn_id))

@@ -16,7 +16,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pawmate.core.resource_limits import read_text_limited
+from pawmate.core.safety.resource_limits import read_text_limited
 from pawmate.skills.dependency_checker import check_skill_dependencies
 from pawmate.skills.clawhub_client import ClawHubClient
 from pawmate.skills.skill_manifest import parse_skill_md
@@ -313,19 +313,23 @@ class SkillInstaller:
 
                 target_dir.mkdir(parents=True, exist_ok=True)
 
+                target_root = target_dir.resolve()
                 for name in names:
                     safe_name = self._safe_zip_path(name)
-                    target_path = target_dir / safe_name
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    zf.extract(name, target_dir)
-                    # Handle Zip Slip by checking resolved path
-                    resolved = target_path.resolve()
-                    if not str(resolved).startswith(str(target_dir.resolve())):
-                        resolved.unlink(missing_ok=True)
+                    target_path = (target_dir / safe_name).resolve()
+                    try:
+                        target_path.relative_to(target_root)
+                    except ValueError:
                         return {
                             "ok": False,
                             "error": f"Zip Slip blocked: {name}",
                         }
+                    if name.endswith("/"):
+                        target_path.mkdir(parents=True, exist_ok=True)
+                        continue
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(name, "r") as src, open(target_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
 
             return {"ok": True, "file_count": len(names)}
 
@@ -621,15 +625,20 @@ class SkillInstaller:
                             ),
                         }
                 target_dir.mkdir(parents=True, exist_ok=True)
+                target_root = target_dir.resolve()
                 for name in names:
                     safe_name = self._safe_zip_path(name)
-                    target_path = target_dir / safe_name
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    zf.extract(name, target_dir)
-                    resolved = target_path.resolve()
-                    if not str(resolved).startswith(str(target_dir.resolve())):
-                        resolved.unlink(missing_ok=True)
+                    target_path = (target_dir / safe_name).resolve()
+                    try:
+                        target_path.relative_to(target_root)
+                    except ValueError:
                         return {"ok": False, "error": f"Zip Slip blocked: {name}"}
+                    if name.endswith("/"):
+                        target_path.mkdir(parents=True, exist_ok=True)
+                        continue
+                    target_path.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(name, "r") as src, open(target_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
             return {"ok": True, "file_count": len(names)}
         except zipfile.BadZipFile as e:
             return {"ok": False, "error": f"Bad ZIP file: {e}"}

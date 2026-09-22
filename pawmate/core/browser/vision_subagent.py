@@ -9,7 +9,7 @@ from pawmate.ocr_vision.models import LocateResult
 
 
 ScreenshotFn = Callable[[], Awaitable[tuple]]
-LocateFn = Callable[[str, str], Awaitable[LocateResult]]
+LocateFn = Callable[[str, str, tuple[int, int]], Awaitable[LocateResult]]
 ClickFn = Callable[[int, int], Awaitable[None]]
 
 
@@ -38,7 +38,7 @@ class VisionSubAgent:
         screenshot_fn: ScreenshotFn,
         locate_fn: LocateFn,
         click_fn: ClickFn,
-        max_steps: int = 4,
+        max_steps: int = 2,
         verify: bool = True,
     ) -> None:
         self._screenshot = screenshot_fn
@@ -50,8 +50,8 @@ class VisionSubAgent:
     async def run(self, *, target: str, action: str = "click") -> SubAgentResult:
         last_reason = ""
         for step in range(1, self.max_steps + 1):
-            data_url, _size = await self._screenshot()
-            loc = await self._locate(data_url, target)
+            data_url, size = await self._screenshot()
+            loc = await self._locate(data_url, target, size)
             if not loc.ok:
                 last_reason = loc.reason
                 if step < self.max_steps:
@@ -63,11 +63,13 @@ class VisionSubAgent:
             if not self.verify:
                 return SubAgentResult(True, acted, step, "acted")
 
-            data_url2, _ = await self._screenshot()
-            loc2 = await self._locate(data_url2, target)
+            data_url2, size2 = await self._screenshot()
+            loc2 = await self._locate(data_url2, target, size2)
             if not loc2.ok:
                 return SubAgentResult(True, acted, step, "verified")
-            last_reason = "target_still_present_after_action"
+            # A button remaining visible does not prove that the click failed.
+            # Never click the same visual guess repeatedly: report the dispatched
+            # action as unverified and let the caller re-read DOM/page state.
+            return SubAgentResult(True, acted, step, "acted_unverified", reason="target_still_present_after_action")
 
-        return SubAgentResult(False, "", self.max_steps, "budget_exhausted", reason=last_reason or "max_steps")
-
+        return SubAgentResult(False, "", self.max_steps, "unlocated", reason=last_reason or "max_steps")

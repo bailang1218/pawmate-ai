@@ -366,7 +366,7 @@ class IntentRouter:
                 MotionState.WORKING_IDLE,
                 priority=65,
                 turn_id=turn_id,
-                preferred_tag="thinking",
+                preferred_tag="busy",
             )
         if intent_type == PetIntentType.THINKING:
             if current_state == MotionState.SLEEPING_IDLE:
@@ -377,7 +377,7 @@ class IntentRouter:
                     MotionState.WORKING_IDLE,
                     priority=45,
                     turn_id=turn_id,
-                    preferred_tag="thinking",
+                    preferred_tag="working_idle",
                 )
             return PetIntent(
                 intent_type,

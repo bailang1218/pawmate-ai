@@ -89,6 +89,5 @@ def assess_reachability(goal_text: str, url: str, observe_items: list) -> Reacha
                 page_kind=page_kind,
                 reason=f"page_kind={page_kind} 无法满足目标",
                 suggestion=rule.suggestion,
-            )
+        )
     return Reachability(reachable=True, page_kind=page_kind)
-

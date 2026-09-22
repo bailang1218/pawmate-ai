@@ -1,29 +1,32 @@
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pawmate.core.engine import AgentEngine, EngineState
-from pawmate.core.tool_router import route_tools_for_turn
+from pawmate.core.runtime.engine import AgentEngine, EngineState
+from pawmate.core.tools.tool_router import route_tools_for_turn
 
 
-ALL = [
+ALL = {
     "browser_goto",
     "browser_read",
     "browser_act",
     "browser_extract",
-    "open_url",
-    "download_file",
-    "download_with_metadata",
+    "native_web_search",
     "run_shell_command",
     "read_text_file",
-]
+}
+BROWSER = {"browser_goto", "browser_read", "browser_act", "browser_extract"}
 
 
 class Registry:
     def list_tools(self, names=None):
         wanted = set(names) if names is not None else set(ALL)
-        return [{"name": name, "description": "", "input_schema": {}} for name in ALL if name in wanted]
+        return [
+            {"name": name, "description": "", "input_schema": {}}
+            for name in ALL
+            if name in wanted
+        ]
 
 
 def make_engine():
@@ -35,25 +38,33 @@ def make_engine():
     return engine
 
 
-def ck(name, cond, info=""):
-    print(("PASS " if cond else "FAIL ") + name + ("  " + info if info else ""))
-    if not cond:
-        raise AssertionError(name)
+def test_browser_cluster_is_matched_while_full_registry_is_visible():
+    route = route_tools_for_turn("browse YouTube", ALL)
+
+    assert route.kind == "browser_task"
+    assert route.tool_names == ALL
+    assert route.matched_tool_names == BROWSER
 
 
-engine = make_engine()
-browser_route = route_tools_for_turn("browser douyin task", ALL)
-ck("browser route exposes goto", "browser_goto" in browser_route.tool_names, str(sorted(browser_route.tool_names)))
-ck("browser route exposes read", "browser_read" in browser_route.tool_names, str(sorted(browser_route.tool_names)))
-ck("browser route exposes act", "browser_act" in browser_route.tool_names, str(sorted(browser_route.tool_names)))
-ck("browser route exposes extract", "browser_extract" in browser_route.tool_names, str(sorted(browser_route.tool_names)))
-ck("browser route exposes full toolset", browser_route.kind == "all" and browser_route.matched_tool_names == set(ALL))
+def test_engine_can_remember_diagnostic_match_without_narrowing_catalog():
+    engine = make_engine()
+    browser_route = route_tools_for_turn("browse YouTube", ALL)
+    engine._remember_recent_task_route(browser_route.matched_tool_names)
 
-engine._remember_recent_task_route(browser_route.tool_names)
-followup_route = route_tools_for_turn("continue", ALL, sticky_tools=engine._recent_task_route_tool_names)
-ck("short follow-up still exposes full route", followup_route.kind == "all" and set(followup_route.tool_names) == set(ALL))
-ck("short follow-up marks inherited", "browser_act" in followup_route.inherited_tool_names)
+    followup = route_tools_for_turn(
+        "continue",
+        ALL,
+        sticky_tools=engine._recent_task_route_tool_names,
+    )
 
-mixed_route = route_tools_for_turn("read file", ALL, sticky_tools=engine._recent_task_route_tool_names)
-ck("new intent records full matched tools", mixed_route.matched_tool_names == set(ALL))
-ck("new intent keeps inherited browser route", "browser_read" in mixed_route.inherited_tool_names)
+    assert followup.tool_names == ALL
+    assert followup.inherited_tool_names == BROWSER
+
+
+def test_new_intent_changes_match_not_registry_visibility():
+    route = route_tools_for_turn("read file", ALL, sticky_tools=BROWSER)
+
+    assert route.kind == "code_read_task"
+    assert route.tool_names == ALL
+    assert route.matched_tool_names == {"read_text_file"}
+    assert route.inherited_tool_names == set()

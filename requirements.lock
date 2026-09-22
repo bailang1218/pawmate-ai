@@ -1,0 +1,22 @@
+# Reproducible top-level dependency set validated on Python 3.11 / Windows.
+# Install with: python -m pip install -r requirements.lock
+PySide6==6.11.1
+httpx==0.28.1
+openai==2.44.0
+anthropic==0.112.0
+aiohttp==3.14.1
+websockets==16.0
+APScheduler==3.11.2
+SQLAlchemy==2.0.51
+tzdata==2026.2; platform_system == "Windows"
+mcp==1.28.1
+playwright==1.60.0
+psutil==7.0.0
+pywin32==312; platform_system == "Windows"
+Pillow==12.2.0
+numpy==2.4.6
+PyYAML==6.0.2
+pytest==9.1.1
+pytest-asyncio==1.4.0
+import-linter==2.13
+pip-audit==2.10.1

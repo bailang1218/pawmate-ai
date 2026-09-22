@@ -86,29 +86,13 @@ End Function
 
 Function CanRunPawMate(cmd)
     Dim rc
-    On Error Resume Next
     rc = shell.Run(cmd & " -B -c ""import pawmate.main""", 0, True)
-    If Err.Number <> 0 Then
-        Err.Clear
-        CanRunPawMate = False
-        On Error GoTo 0
-        Exit Function
-    End If
-    On Error GoTo 0
     CanRunPawMate = (rc = 0)
 End Function
 
 Function CommandExists(cmd)
     Dim rc
-    On Error Resume Next
     rc = shell.Run(cmd & " -B -c ""import sys""", 0, True)
-    If Err.Number <> 0 Then
-        Err.Clear
-        CommandExists = False
-        On Error GoTo 0
-        Exit Function
-    End If
-    On Error GoTo 0
     CommandExists = (rc = 0)
 End Function
 

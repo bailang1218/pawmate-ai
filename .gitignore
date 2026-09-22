@@ -1,4 +1,3 @@
-# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,39 +7,39 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Virtual environments
 .venv/
-.venv*/
+.venv311/
 venv/
 env/
 
-# Local runtime state
 data/
+!quiz_app/data/
+!quiz_app/data/questions.json
+quiz_app/data/*.sqlite3
+quiz_app/data/settings.json
 logs/
-downloads/
+/downloads/
 browser_profiles/
 .qtwebengine_data/
-pawmate/config.json
-config.local.json
-*.local.json
-.env
-*.env
 
-# Browser and Playwright local data
-ms-playwright/
-playwright-report/
-
-# Archives and build outputs
 *.zip
 *.7z
 *.rar
 *.log
+
+.env
+*.key
+*.pem
 build/
 dist/
 *.egg-info/
-
-# Local IDE/system files
-.idea/
-.vscode/
-Thumbs.db
-.DS_Store
+Build/
+Library/
+Temp/
+UserSettings/
+output/
+tree_*.txt
+config.json
+pawmate/config.json
+config.local.json
+quiz_app/.env

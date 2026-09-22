@@ -1,2 +1,1 @@
 """Browser automation routing core."""
-

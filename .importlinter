@@ -15,8 +15,8 @@ allow_indirect_imports = true
 name = low-level browser tools must not import core.browser
 type = forbidden
 source_modules =
-    pawmate.tools.playwright_browser
-    pawmate.tools.native_browser
+    pawmate.tools.browser.playwright_runtime
+    pawmate.tools.browser.native
 forbidden_modules =
     pawmate.core.browser
 
@@ -27,4 +27,3 @@ source_modules =
     pawmate.ocr_vision
 forbidden_modules =
     pawmate.core.browser
-
